@@ -1,0 +1,10 @@
+.git
+.claude
+.agents
+data
+secrets
+bin
+.env
+**/*.pem
+**/*.key
+**/*.zip

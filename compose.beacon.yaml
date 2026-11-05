@@ -1,0 +1,27 @@
+# Standalone Beacon: one directory contains configuration, credential and state.
+name: ${BEACON_PROJECT_NAME:-rf-link-beacon}
+services:
+  beacon:
+    build:
+      context: .
+      args:
+        GO_IMAGE: ${BEACON_GO_IMAGE:-public.ecr.aws/docker/library/golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb}
+        VERSION: ${BEACON_VERSION:-dev}
+    command: ["serve", "--config", "/data/config.json", "--send"]
+    user: "${BEACON_UID:-65532}:${BEACON_GID:-65532}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    stop_grace_period: 10s
+    volumes:
+      - type: bind
+        source: ${BEACON_DATA_DIR:-./data}
+        target: /data
+        bind:
+          create_host_path: false

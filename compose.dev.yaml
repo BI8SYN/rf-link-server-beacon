@@ -1,0 +1,5 @@
+# Optional local dev only: localhost:18105 is the existing host dev server.
+# Linux supports host networking; Docker Desktop requires that feature enabled.
+services:
+  beacon:
+    network_mode: host

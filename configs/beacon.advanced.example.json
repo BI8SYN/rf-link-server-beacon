@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "coordinates_confirmed": false,
+  "callsign": "YOURCALL",
+  "label": "服务器公告身份",
+  "purpose_note": "用于本服务器STATION发现公告",
+  "signer": {
+    "base_url": "https://signer.example.invalid",
+    "credential_file": "/run/secrets/beacon_credential",
+    "allow_loopback_http": false
+  },
+  "trust": {
+    "root_fingerprints": ["REPLACE_WITH_TRUSTED_ROOT_TBS_FINGERPRINT"],
+    "crl_urls": ["https://pki.example.invalid/root.crl.json", "https://pki.example.invalid/intermediate.crl.json"]
+  },
+  "state_dir": "/var/lib/rf-link-beacon",
+  "station": {
+    "ssid": 15,
+    "latitude": "2505.12N",
+    "longitude": "10242.22E",
+    "symbolTable": "/",
+    "symbolCode": "I",
+    "countryCode": "CN",
+    "name": "RF Link test node",
+    "host": "mqtt.example.invalid",
+    "port": 1883,
+    "filterKm": 5000
+  },
+  "statistics": {"online": 0, "peak": 0},
+  "aprs": {
+    "host": "rotate.aprs2.net",
+    "port": 14580,
+    "passcode_file": "/run/secrets/aprs_passcode",
+    "interval_seconds": 600
+  }
+}

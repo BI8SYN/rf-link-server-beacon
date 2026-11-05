@@ -1,0 +1,10 @@
+{
+  "callsign": "YOURCALL",
+  "ssid": 15,
+  "grid": "YOURGRID",
+  "server": {
+    "name": "RF Link 节点",
+    "host": "mqtt.example.invalid",
+    "port": 1883
+  }
+}

@@ -1,0 +1,10 @@
+# Template for isolated containers, not loopback to EMQX itself.
+authentication = [{
+  mechanism = password_based
+  backend = http
+  enable = true
+  method = post
+  url = "http://sas:8080/auth"
+  headers { "content-type" = "application/json" }
+  body { username = "${username}", password = "${password}" }
+}]

@@ -1,0 +1,9 @@
+{
+  "Server": {"Uid": 0, "Callsign": "UNCONFIGURED", "IssuerSn": 0, "CertFingerprint": "", "Admins": []},
+  "Mqtt": {"Host": "mqtt.example.invalid", "Port": 1883, "Clusters": []},
+  "Trust": {"AllowIssuerSn": [], "RootsDir": "/home/app/.sas/roots"},
+  "Crl": {"RefreshSec": 14400},
+  "Http": {"Addr": "0.0.0.0", "Port": 8080, "TtlSec": 14400, "ResponseTemplate": "emqx", "MaxBodyBytes": 65536, "MaxConcurrent": 128},
+  "Log": {"Level": "Info"},
+  "Update": {"Enabled": false}
+}

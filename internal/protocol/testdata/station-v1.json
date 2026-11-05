@@ -1,0 +1,39 @@
+{
+  "status": "historical-public-verification-only",
+  "sourceFixture": "aprs-station-observed.json",
+  "sourceUrl": "https://bg5esn.com/docs/fmo-aprs-formate/",
+  "observedDate": "2026-10-28",
+  "verificationTime": 1793182441,
+  "warning": "公开历史报文，仅固定历史时间验签，禁止作为新公告发送；没有私钥或API凭据。",
+  "aprsLine": "BI8SYN-15>APFMO4,TCPIP*,qAC,T2NANJING:=2505.12NF10242.22EiFMO-V4,STATION,CERT:imNGTU8EaHVzZXJDZXJ0GQPpZkJJOFNZThkMd1gg48IRV-6wDOi-enWys5F1Z4V6rXw1D9ulGXfjV11N6VEaam38axpsTy_rWEBn3qohl_XJMp2v7dd6o49kXiAHImptczldrcia6FVUqZAFzDFKTzIqL2ehRYc6Y2bWT5hPm1sAN5iypkmnxicB,CN,RF Link,fmo.bi8syn.com,P1883,F5000KM,U2/6,SIG:LkyCX7f7Kvl5YJ7KsUx5544gyj09yUe1oEZSQ6deAMHk3jaATQ7iLHscHaT6vrd7tHAtBcX1loDpV3st6SB6Aw",
+  "certBlobBase64url": "imNGTU8EaHVzZXJDZXJ0GQPpZkJJOFNZThkMd1gg48IRV-6wDOi-enWys5F1Z4V6rXw1D9ulGXfjV11N6VEaam38axpsTy_rWEBn3qohl_XJMp2v7dd6o49kXiAHImptczldrcia6FVUqZAFzDFKTzIqL2ehRYc6Y2bWT5hPm1sAN5iypkmnxicB",
+  "certBlobHex": "8a63464d4f046875736572436572741903e96642493853594e190c775820e3c21157eeb00ce8be7a75b2b3917567857aad7c350fdba51977e3575d4de9511a6a6dfc6b1a6c4f2feb584067deaa2197f5c9329dafedd77aa38f645e2007226a6d73395dadc89ae85554a99005cc314a4f322a2f67a145873a6366d64f984f9b5b003798b2a649a7c62701",
+  "certificateFingerprint": "Im-j4Uvzjqm_F6yShKf6X_X1na2a7vU1oAwMMR0o-xo",
+  "certBlobHash": "I7OHtCJjTT8ULXlQjraMfqA1b4_NI58IwoiiW_dsy-E",
+  "publicKeyBase64url": "48IRV-6wDOi-enWys5F1Z4V6rXw1D9ulGXfjV11N6VE",
+  "timeSalt": 2988637,
+  "tbsArray": [
+    "FMO",
+    4,
+    "STATION",
+    "BI8SYN",
+    15,
+    "2505.12N",
+    "10242.22E",
+    {
+      "cborType": "bytes",
+      "base64url": "I7OHtCJjTT8ULXlQjraMfqA1b4_NI58IwoiiW_dsy-E",
+      "hex": "23b387b422634d3f142d79508eb68c7ea0356f8fcd239f08c288a25bf76ccbe1"
+    },
+    "CN",
+    "RF Link",
+    "fmo.bi8syn.com",
+    1883,
+    5000,
+    2,
+    6,
+    2988637
+  ],
+  "tbsCborHex": "9063464d4f046753544154494f4e6642493853594e0f68323530352e31324e6931303234322e323245582023b387b422634d3f142d79508eb68c7ea0356f8fcd239f08c288a25bf76ccbe162434e675246204c696e6b6e666d6f2e62693873796e2e636f6d19075b19138802061a002d9a5d",
+  "signatureBase64url": "LkyCX7f7Kvl5YJ7KsUx5544gyj09yUe1oEZSQ6deAMHk3jaATQ7iLHscHaT6vrd7tHAtBcX1loDpV3st6SB6Aw"
+}

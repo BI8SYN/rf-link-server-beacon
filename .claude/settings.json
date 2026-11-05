@@ -1,0 +1,5 @@
+{
+  "hooks": {
+    "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "bash .claude/scripts/drift-check-hook.sh", "timeout": 10000}]}]
+  }
+}

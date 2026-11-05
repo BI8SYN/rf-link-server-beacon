@@ -1,0 +1,16 @@
+.env
+data/
+secrets/
+bin/
+*.pem
+*.key
+*.p12
+*.zip
+*.token
+*.log
+.DS_Store
+
+/rf-link-server-beacon
+*.tar.gz
+*.tar
+*.bak

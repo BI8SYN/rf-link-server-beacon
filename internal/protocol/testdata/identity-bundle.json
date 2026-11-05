@@ -1,0 +1,77 @@
+{
+  "notice": "Public synthetic client bundle. No private key or seed. Not production trust material.",
+  "verificationTime": 1000,
+  "trustedRootFingerprint": "ezhy0C8At6k0PZqi5hMPB-QVhfBpnfa3XltcrMcf77g",
+  "bundle": {
+    "rootCert": {
+      "sn": 1,
+      "type": "rootCA",
+      "issuer": {
+        "name": "FIXTURE ROOT",
+        "email": "test@example.invalid"
+      },
+      "subject": {
+        "name": "测试根 é é",
+        "publicKey": "ohtFMCSf7Zhh5sTdT1AYkgXpImc2bP8onLxRM1dEu8s"
+      },
+      "extensions": {
+        "isCA": true,
+        "pathLen": 1,
+        "crl": "https://pki.example.invalid/test/root.crl.json",
+        "license": "",
+        "keyId": "fixture-root"
+      },
+      "iat": 100,
+      "exp": 10000,
+      "signatureAlgorithm": "Ed25519",
+      "signature": "kNc8ZJzD6oBAg-VTnC1ufsHoJmz6lPgnlb8n4GBI7e9KK4rDb6a7sh4_sglhEwPnVbvQ_j0ww-C5kRiEbazHDQ"
+    },
+    "intermediateCert": {
+      "sn": 2,
+      "type": "intermediateCA",
+      "issuer": {
+        "sn": 1,
+        "name": "FIXTURE ROOT",
+        "publicKey": "ohtFMCSf7Zhh5sTdT1AYkgXpImc2bP8onLxRM1dEu8s"
+      },
+      "subject": {
+        "name": "FIXTURE INTERMEDIATE",
+        "email": "test@example.invalid",
+        "publicKey": "66ty9Xo8ypdTbznPQIbyF7FvVm5Yi6PKWIXYffHKWQo"
+      },
+      "extensions": {
+        "isCA": true,
+        "pathLen": 0,
+        "keyId": "fixture-inter",
+        "crl": "https://pki.example.invalid/test/intermediate.crl.json",
+        "license": "",
+        "uidRange": {
+          "start": 10,
+          "end": 100
+        },
+        "issuingCountries": [
+          "US",
+          "CN"
+        ]
+      },
+      "iat": 200,
+      "exp": 9000,
+      "signatureAlgorithm": "Ed25519",
+      "signature": "rwd7Fkb5xoL-2Thnm0j4CrDkfh-81oxpSazWGojscK2Q93MQbb1y1sntLczKOkUXZn3SXJ2hdsZHCdaTnHC0BQ"
+    },
+    "userCert": {
+      "type": "userCert",
+      "issuerSn": 2,
+      "subject": {
+        "callsign": "BI8SYN",
+        "uid": 20,
+        "publicKey": "XsrSIggQkLLFQueUQgma03GMFCHwjVW3QaLjgC6NRxM"
+      },
+      "iat": 300,
+      "exp": 8000,
+      "signatureAlgorithm": "Ed25519",
+      "signature": "9prlCtF29qLQCKWTNxMLn2eogZiFJt9mbOWpQ744PlLywOm6w-Gmf8kWkAvSX6DwG1u67-57D-3Jt0dDwa9CCw",
+      "certFingerprint": "P71fwW2z2NpbjyC9ZgOeroeHlco6S24ZJyVPIgcfOHs"
+    }
+  }
+}

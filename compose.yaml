@@ -1,0 +1,75 @@
+# MQTT + SAS server. Start Beacon separately after verifying client login.
+name: ${FMO_PROJECT_NAME:-rf-link-server}
+x-sas-image: &sas-image ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6@sha256:4145c2a65bff74125f1911d602f7988446b88dfd721ce139cd17a5952dd56323
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+services:
+  sas-init:
+    image: *sas-image
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mkdir -p /home/app/.sas/roots
+        cp /seed/roots/*.json /home/app/.sas/roots/
+        if [ ! -f /home/app/.sas/config.json ]; then
+          cp /seed/config.json /home/app/.sas/config.json
+        fi
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    volumes:
+      - sas-data:/home/app/.sas
+      - ./deploy/trust/roots:/seed/roots:ro
+      - ./deploy/sas/config.example.json:/seed/config.json:ro
+    logging: *logging
+  sas:
+    image: *sas-image
+    depends_on:
+      sas-init:
+        condition: service_completed_successfully
+    command: ["--config", "/home/app/.sas/config.json", "--server-uid", "${SAS_SERVER_UID:?Run beacon.sh sas-command first}", "--server-callsign", "${SAS_SERVER_CALLSIGN:?Required}", "--mqtt-host", "${SAS_MQTT_HOST:?Required}", "--mqtt-port", "${SAS_MQTT_PORT:-1883}", "--cert-fingerprint", "${SAS_CERT_FINGERPRINT:?Required}", "--issuer-sn", "${SAS_ISSUER_SN:?Required}", "--http-addr", "0.0.0.0", "--http-port", "8080"]
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - sas-data:/home/app/.sas
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    logging: *logging
+  emqx:
+    image: emqx/emqx:5.8.9@sha256:35b46f7aa7a0d51f3959e4344221ac5ec7f948b03e43099286b6c40a07bb393b
+    depends_on:
+      sas:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      EMQX_NODE__NAME: emqx@emqx
+      EMQX_AUTHENTICATION__1: >-
+        {mechanism = password_based, backend = http, enable = true, method = post, url = "http://sas:8080/auth", headers = {"Content-Type" = "application/json"}, body = {username = "$${username}", password = "$${password}"}}
+      EMQX_DASHBOARD__DEFAULT_USERNAME: '"${EMQX_DASHBOARD_USERNAME:-admin}"'
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: '"${EMQX_DASHBOARD_PASSWORD:?Set a strong Dashboard password in .env}"'
+    ports:
+      - "${FMO_BIND_ADDR:-0.0.0.0}:${SAS_MQTT_PORT:-1883}:1883"
+      - "127.0.0.1:${FMO_DASHBOARD_PORT:-18083}:18083"
+    volumes:
+      - emqx-data:/opt/emqx/data
+    healthcheck:
+      test: ["CMD", "/usr/bin/curl", "-fsS", "http://127.0.0.1:18083/status"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    logging: *logging
+volumes:
+  sas-data:
+  emqx-data:

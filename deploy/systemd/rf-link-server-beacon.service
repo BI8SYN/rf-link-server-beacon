@@ -1,0 +1,27 @@
+[Unit]
+Description=RF Link Server Beacon
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=rf-link-beacon
+Group=rf-link-beacon
+WorkingDirectory=/var/lib/rf-link-server-beacon
+ExecStart=/usr/local/lib/rf-link-server-beacon/beacon serve --config /var/lib/rf-link-server-beacon/config.json --send
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/rf-link-server-beacon
+RestrictSUIDSGID=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
