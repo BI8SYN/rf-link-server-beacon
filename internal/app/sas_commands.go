@@ -15,11 +15,9 @@ import (
 
 // SASCommands is a read-only preview. It never acquires the running daemon's
 // lock, renews credentials, applies SAS settings or requests a message signature.
-func SASCommands(ctx context.Context, cfg config.Config, deployment string) (string, error) {
-	switch deployment {
-	case "full-stack", "compose", "docker", "native":
-	default:
-		return "", errors.New("deployment required: use ./beacon.sh sas-command for host detection, or --deployment full-stack|compose|docker|native")
+func SASCommands(ctx context.Context, cfg config.Config, deployment string, options SASSetupOptions) (string, error) {
+	if err := ValidateSASSetup(options, deployment, cfg.Station.Port); err != nil {
+		return "", err
 	}
 	if e := cfg.Validate(); e != nil {
 		return "", e
@@ -63,12 +61,28 @@ func SASCommands(ctx context.Context, cfg config.Config, deployment string) (str
 	if e = preview.checkCRLs(ctx, bound); e != nil {
 		return "", e
 	}
+	// Docker new-server modes all use the reviewed full stack; never reuse FMO state.
+	if options.Scenario == "new-server" && deployment != "native" {
+		deployment = "full-stack"
+	}
 	uid := strconv.FormatUint(bound.User.UID, 10)
 	issuer := strconv.FormatUint(bound.User.IssuerSN, 10)
 	port := strconv.FormatUint(cfg.Station.Port, 10)
 	fp := bound.User.Fingerprint()
 	args := []string{"--server-uid", uid, "--server-callsign", bound.User.Callsign, "--mqtt-host", cfg.Station.Host, "--mqtt-port", port, "--cert-fingerprint", fp, "--issuer-sn", issuer, "--http-addr", "0.0.0.0", "--http-port", "8080"}
 	rootNote := fmt.Sprintf("# 确认SAS已安装认可的Root（TBS指纹 %s），保留原信任根。\n", bound.RootFingerprint)
+	if options.Scenario == "coexist" {
+		return coexistCommands(options, deployment, uid, bound.User.Callsign, cfg.Station.Host, port, fp, issuer, rootNote), nil
+	}
+	prefix := "# 新建独立RF Link SAS服务及数据卷，不修改现有FMO服务；随后配置新Broker的HTTP认证。\n"
+	if options.Scenario == "convert" {
+		prefix = "# 转换为RF Link：先备份原SAS配置、管理员和信任根；替换身份后不再保留原FMO身份接入。\n"
+	}
+	nativeConfig := ""
+	if options.Scenario == "new-server" && deployment == "native" {
+		nativeConfig = `--config "$HOME/.rf-link-sas/config.json" --roots-dir "$HOME/.rf-link-sas/roots" `
+		prefix += "mkdir -p \"$HOME/.rf-link-sas/roots\"\ncp deploy/trust/roots/*.json \"$HOME/.rf-link-sas/roots/\"\n"
+	}
 	switch deployment {
 	case "full-stack":
 		return fmt.Sprintf(`# 本项目完整服务器：将以下六项合并到.env，保留Dashboard密码。
@@ -83,19 +97,19 @@ SAS_ISSUER_SN=%s
 `, uid, bound.User.Callsign, cfg.Station.Host, port, fp, issuer), nil
 	case "compose":
 		dockerArgs, _ := json.Marshal(args)
-		return fmt.Sprintf(`# SAS Compose：把command合并到原SAS服务，保留镜像、卷和其他配置。
+		return prefix + fmt.Sprintf(`# SAS Compose：把command用于选定SAS服务，保留镜像、卷和其他配置。
 command: %s
 # 合并后在原项目目录执行：docker compose up -d
 # EMQX与SAS须在同一网络，认证URL为http://<SAS服务名>:8080/auth。
 `, dockerArgs) + rootNote, nil
 	case "docker":
-		return "# 独立Docker SAS：把下列参数放到原docker run命令的镜像名之后，保留原卷和网络。\n" +
+		return prefix + "# 独立Docker SAS：把下列参数放到原docker run命令的镜像名之后，保留原卷和网络。\n" +
 			strings.Join(args, " ") + "\n# 备份后用原卷重建SAS容器，EMQX认证URL指向实际SAS容器地址:8080/auth；不必发布公网8080。\n" + rootNote, nil
 	default:
-		return fmt.Sprintf(`# 原生SAS与EMQX同宿主机：手工运行时使用以下命令。
-./sas --server-uid %s --server-callsign %s --mqtt-host %s --mqtt-port %s --cert-fingerprint %s --issuer-sn %s --http-addr 127.0.0.1 --http-port 8080
-# 已有系统服务时，将参数合并到原服务配置后重启，不另外启动第二个SAS。
+		return prefix + fmt.Sprintf(`# 原生SAS与EMQX同宿主机：手工运行时使用以下命令。
+./sas %s--server-uid %s --server-callsign %s --mqtt-host %s --mqtt-port %s --cert-fingerprint %s --issuer-sn %s --http-addr 127.0.0.1 --http-port 8080
+# 已有选定RF Link服务（或转换场景）时，先备份再将参数合并到该服务实际配置并重启，不另外启动第二个SAS。
 # EMQX认证URL：http://127.0.0.1:8080/auth；混合部署需按实际网络调整监听和回调。
-`, uid, bound.User.Callsign, cfg.Station.Host, port, fp, issuer) + rootNote, nil
+`, nativeConfig, uid, bound.User.Callsign, cfg.Station.Host, port, fp, issuer) + rootNote, nil
 	}
 }

@@ -34,3 +34,9 @@ Trust只托管身份和受限STATION签名；Beacon持有运行配置并持久�
 私钥不进入管理员主机、镜像、环境变量、卷或备份。远端令牌仍可被管理员复制，需用节点绑定、参数白名单、短期令牌、撤销与审计控制。签名服务验证“签名权限”与证书 CA 验证不是一回事。
 
 CRL 静态分发、证书审批、广播签名可分服务。若接入现有 fmo-trust，必须保留既有人工作业/1Password 边界，不可把其 CA 签名路径暴露为网络接口。
+
+## 三种业务场景
+
+sas-command必须明确选择new-server、coexist或convert，再确定运行方式。新建默认完整栈；兼容扩展创建独立RF Link SAS与同Broker的新监听端口，原FMO身份/端口/全局认证保持；只有convert才给出备份后替换原SAS身份的步骤，可沿用旧端口且不再保留原FMO身份接入。
+
+compose.sas.yaml只创建新的RF Link SAS，独立卷和HTTP端口；可用compose.sas-network.yaml加入现有Broker网络。EMQX 5.8.9监听器片段通过CLI生成，不自动应用生产配置。受控HTTP后端的双监听正向/错误身份/后端故障、双向消息、ACL和撤回测试通过，真实FMO/RF Link客户端仍须部署者验收。

@@ -17,3 +17,5 @@ last-reviewed: 2026-11-06
 - 不做真实人数监测的第一版可使用明确标记的静态 0/0；不能伪造实时统计。若接 EMQX API，单独受限令牌，不共享 Dashboard 管理密码。
 
 - sas-command部署识别在宿主机脚本完成，仅查询docker ps的镜像/Compose标签及本机SAS安装状态；不读取容器环境变量、不挂载socket。Go CLI仅接受明确部署类型，不把Beacon的容器环境作为SAS拓扑依据。
+
+- SAS生成先校验scenario；兼容模式校验新旧MQTT端口不同，独立SAS卷/目录和HTTP监听。EMQX监听器局部认证覆盖已在5.8.9验证，模板不改全局认证/授权，其他版本需另验。只有明确convert才生成替换原身份步骤。
