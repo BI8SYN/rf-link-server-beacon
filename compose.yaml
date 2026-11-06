@@ -54,6 +54,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       EMQX_NODE__NAME: emqx@emqx
+      EMQX_LISTENERS__TCP__DEFAULT__ENABLE_AUTHN: quick_deny_anonymous
       EMQX_AUTHENTICATION__1: >-
         {mechanism = password_based, backend = http, enable = true, method = post, url = "http://sas:8080/auth", headers = {"Content-Type" = "application/json"}, body = {username = "$${username}", password = "$${password}"}}
       EMQX_DASHBOARD__DEFAULT_USERNAME: '"${EMQX_DASHBOARD_USERNAME:-admin}"'

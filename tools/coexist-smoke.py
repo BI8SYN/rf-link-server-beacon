@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Opt-in isolated EMQX 5.8.9 listener/auth/ACL regression. No FMO/Trust/APRS traffic."""
-import json, os, pathlib, socket, struct, subprocess, tempfile, time
+import json, os, pathlib, socket, struct, subprocess, tempfile, time, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 EMQX = 'emqx/emqx:5.8.9@sha256:35b46f7aa7a0d51f3959e4344221ac5ec7f948b03e43099286b6c40a07bb393b'
@@ -58,6 +58,26 @@ def connect(p, identity, expected=0):
     assert body[1] == 0, ('unexpected deny', identity, p, body)
     return s
 
+def backend_count(role):
+    p = port(PREFIX+'-'+role,8080)
+    with urllib.request.urlopen('http://127.0.0.1:'+str(p)+'/requests',timeout=3) as response:
+        return json.load(response)
+
+def wait_authenticated(broker, endpoints):
+    # EMQX 5.8.9 can listen before auth hooks are installed. Treat this as
+    # maintenance: don't call CONNECT success alone authentication readiness.
+    deadline = time.monotonic()+90
+    while True:
+        try:
+            for p, role in endpoints:
+                before=backend_count(role)
+                connect(p,role).close()
+                assert backend_count(role)>before, 'authentication backend not called yet'
+            return
+        except (OSError,AssertionError):
+            if time.monotonic()>deadline or docker('inspect','--format','{{.State.Running}}',broker)!='true': raise
+            time.sleep(1)
+
 def exchange(old_port, new_port):
     for sub_port, sub_role, pub_port, pub_role in [(old_port,'fmo',new_port,'rflink'),(new_port,'rflink',old_port,'fmo')]:
         sub = connect(sub_port, sub_role); pub = connect(pub_port, pub_role)
@@ -86,15 +106,10 @@ authorization { no_match = deny, sources = [{type = file, enable = true, path = 
     docker('network','create',PREFIX)
     try:
         for role, alias in [('fmo','fmo-sas'),('rflink','rf-link-sas')]:
-            start(role,'--network-alias',alias,'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true','-v',str(tmp/'auth')+':/test-auth:ro','--entrypoint','/test-auth',SAS,role)
+            start(role,'--network-alias',alias,'-p','127.0.0.1::8080','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges:true','-v',str(tmp/'auth')+':/test-auth:ro','--entrypoint','/test-auth',SAS,role)
         broker = start('broker','-p','127.0.0.1::1883','-p','127.0.0.1::1884','-v',str(tmp/'emqx.conf')+':/opt/emqx/etc/emqx.conf:ro','-v',str(tmp/'acl.conf')+':/opt/emqx/etc/test-acl.conf:ro',EMQX)
         old_port, new_port = port(broker,1883), port(broker,1884)
-        deadline = time.monotonic()+90
-        while True:
-            try: connect(old_port,'fmo').close(); connect(new_port,'rflink').close(); break
-            except (OSError,AssertionError):
-                if time.monotonic()>deadline or docker('inspect','--format','{{.State.Running}}',broker)!='true': raise
-                time.sleep(1)
+        wait_authenticated(broker,[(old_port,'fmo'),(new_port,'rflink')])
         for p, role, other in [(old_port,'fmo','rflink'),(new_port,'rflink','fmo')]:
             connect(p,role).close()
             for wrong in ['', 'wrong', other]: connect(p,wrong,expected=5)
@@ -103,24 +118,22 @@ authorization { no_match = deny, sources = [{type = file, enable = true, path = 
         print('PASS: bidirectional cross-port messages and shared ACL rejection',flush=True)
         for role, blocked, good, good_role in [('rflink',new_port,old_port,'fmo'),('fmo',old_port,new_port,'rflink')]:
             docker('stop',PREFIX+'-'+role)
-            connect(blocked,role,expected=5); connect(good,good_role).close()
+            connect(blocked,role,expected=5)
+            connect(blocked,good_role,expected=5)  # No fallback to the other listener's identity.
+            connect(blocked,'',expected=5)
+            connect(good,good_role).close()
             # Remove the stopped fixture and recreate only this synthetic backend.
             alias = 'rf-link-sas' if role=='rflink' else 'fmo-sas'
             docker('rm','-v',PREFIX+'-'+role)
             containers.remove(PREFIX+'-'+role)
-            start(role,'--network-alias',alias,'--read-only','--cap-drop','ALL','-v',str(tmp/'auth')+':/test-auth:ro','--entrypoint','/test-auth',SAS,role)
+            start(role,'--network-alias',alias,'-p','127.0.0.1::8080','--read-only','--cap-drop','ALL','-v',str(tmp/'auth')+':/test-auth:ro','--entrypoint','/test-auth',SAS,role)
             time.sleep(1)
         print('PASS: each authentication backend outage is isolated',flush=True)
         # Withdraw only the RF Link listener, retaining byte-for-byte original FMO configuration.
         (tmp/'emqx.conf').write_text(old_config)
         docker('restart',broker)
         old_port = port(broker,1883)  # Docker may reassign an ephemeral host port on restart.
-        deadline=time.monotonic()+60
-        while True:
-            try: connect(old_port,'fmo').close(); break
-            except (OSError,AssertionError):
-                if time.monotonic()>deadline or docker('inspect','--format','{{.State.Running}}',broker)!='true': raise
-                time.sleep(1)
+        wait_authenticated(broker,[(old_port,'fmo')])
         print('PASS: original FMO access remains after removing RF Link listener',flush=True)
     except BaseException:
         for name in containers:

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"sync/atomic"
 )
 
 func main() {
@@ -13,8 +14,11 @@ func main() {
 		os.Exit(2)
 	}
 	role := os.Args[1]
+	var requests atomic.Uint64
 	mux := http.NewServeMux()
+	mux.HandleFunc("/requests", func(w http.ResponseWriter, r *http.Request) { json.NewEncoder(w).Encode(requests.Load()) })
 	mux.HandleFunc("/auth", func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
 		var body struct {
 			Username string `json:"username"`
 			Password string `json:"password"`

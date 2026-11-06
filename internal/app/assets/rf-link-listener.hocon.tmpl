@@ -2,7 +2,7 @@
 # EMQX 5.8.9；不要把下面的认证器加入全局authentication数组。
 listeners.tcp.rf_link {
   bind = "0.0.0.0:%d"
-  enable_authn = true
+  enable_authn = quick_deny_anonymous
   authentication = [{
     mechanism = password_based
     backend = http

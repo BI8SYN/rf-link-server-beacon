@@ -9,7 +9,7 @@ last-reviewed: 2026-11-06
 
 ## 准备
 
-服务器安装 Git、Docker、Docker Compose v2。准备客户端能访问的域名或公网地址，将域名解析到本机，并在云安全组和防火墙开放 TCP 1883。本教程使用普通 MQTT 1883。
+服务器安装 Git、Docker、Docker Compose v2。准备客户端能访问的域名或公网地址，将域名解析到本机，先在云安全组或覆盖Docker流量的防火墙中仅允许验收客户端访问TCP 1883，验证后再按运营策略放行。本教程使用普通 MQTT 1883。
 
 ```sh
 git clone https://github.com/BI8SYN/rf-link-server-beacon.git
@@ -60,7 +60,7 @@ docker compose up -d --wait
 ./beacon.sh doctor
 ```
 
-容器 healthy 不代表客户端已通过认证。登录或检查失败时先排查，不要跳过这一步。
+容器healthy或端口已监听都不代表HTTP认证已就绪。EMQX 5.8.9冷启动存在先监听、后安装认证hook的上游窗口；quick_deny_anonymous只能提前拒绝无用户名连接。维护期间限制外部接入，验证合法登录与错误/匿名登录拒绝后再正式放行。每次Broker冷启动均须考虑该限制，详见[启动边界](coexist.md#emqx-589冷启动边界)。本项目没有实现外部启动流量门禁。
 
 ## 4. 开始广播
 
