@@ -19,7 +19,7 @@ func Run(args []string, out, errOut io.Writer, version string) int {
 }
 func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(out, "Usage: rf-link-server-beacon <init|version|status|enroll|wait|doctor|sas-command|sync-identity|once|run|serve> [--config FILE] [--send] [--sas-output FILE]")
+		fmt.Fprintln(out, "Usage: rf-link-server-beacon <init|version|status|enroll|wait|doctor|sas-command|sync-identity|once|run|serve> [--config FILE] [--send] [--sas-output FILE] [--deployment full-stack|compose|docker|native]")
 		return 0
 	}
 	cmd := args[0]
@@ -46,15 +46,16 @@ func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version
 	path := flags.String("config", "", "configuration file")
 	send := flags.Bool("send", false, "explicitly publish to configured APRS-IS")
 	sas := flags.String("sas-output", "", "new absolute SAS configuration file")
+	deployment := flags.String("deployment", "", "SAS deployment: full-stack|compose|docker|native")
 	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 {
-		fmt.Fprintln(errOut, "invalid arguments; use --config FILE, --send, or --sas-output FILE for the corresponding operation")
+		fmt.Fprintln(errOut, "invalid arguments; use --config FILE, --send, --sas-output FILE, or --deployment for the corresponding operation")
 		return 2
 	}
 	if *path == "" {
 		fmt.Fprintln(errOut, "--config FILE is required")
 		return 2
 	}
-	if (*send && cmd != "run" && cmd != "serve" && cmd != "once") || (*sas != "" && cmd != "sync-identity") {
+	if (*send && cmd != "run" && cmd != "serve" && cmd != "once") || (*sas != "" && cmd != "sync-identity") || (*deployment != "" && cmd != "sas-command") {
 		fmt.Fprintln(errOut, "option is not supported for this command")
 		return 2
 	}
@@ -66,6 +67,14 @@ func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version
 		fmt.Fprintln(errOut, "sync-identity requires --sas-output with a new absolute path")
 		return 2
 	}
+	if cmd == "sas-command" {
+		switch *deployment {
+		case "full-stack", "compose", "docker", "native":
+		default:
+			fmt.Fprintln(errOut, "使用 ./beacon.sh sas-command 自动识别，或 --deployment full-stack|compose|docker|native")
+			return 2
+		}
+	}
 	cfg, e := config.Load(*path)
 	if e != nil {
 		fmt.Fprintln(errOut, e)
@@ -74,7 +83,7 @@ func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if cmd == "sas-command" {
-		text, err := app.SASCommands(ctx, cfg)
+		text, err := app.SASCommands(ctx, cfg, *deployment)
 		if err != nil {
 			fmt.Fprintln(errOut, err)
 			return 1

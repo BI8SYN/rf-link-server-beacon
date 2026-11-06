@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-05
+last-reviewed: 2026-11-06
 ---
 # 产品需求
 
@@ -15,7 +15,9 @@ last-reviewed: 2026-11-05
 
 ## 部署
 
-Docker 与原生 Linux systemd 提供源码目录一行入口。已有服务器只增加 Beacon；新服务器提供 EMQX + 官方 SAS 的 Compose 与完整教程。SAS 不开放公网端口，Broker 启动前配置 HTTP 认证，缺少必填身份或 Dashboard 密码即失败。SAS 配置代码自动使用广播身份，原生与容器分别给出参数。
+首次部署的推荐流程为setup/wait → sas-command → 应用SAS并验证客户端 → doctor/start。无需全自动配置；教程按已有服务器和从零建服分流，只保留完成当前步骤所需说明。deploy-docker/deploy-native身份就绪后自动发报，不自动应用SAS，不能作为首次配置的无条件推荐入口。
+
+Docker 与原生 Linux systemd 提供源码目录一行入口。已有服务器只增加 Beacon；新服务器提供 EMQX + 官方 SAS 的 Compose 与完整教程。SAS 不开放公网端口，Broker 启动前配置 HTTP 认证，缺少必填身份或 Dashboard 密码即失败。SAS 配置代码自动使用广播身份，按实际SAS部署方式只输出对应参数和步骤。宿主机识别运行中的完整栈/Compose/独立容器及本机原生SAS，未知或多种部署并存时选择；非交互环境须明确指定--deployment。不能根据Beacon运行方式推断SAS，也不挂载Docker socket。
 
 一个 data 目录保存广播状态；默认根随发行包交付，其他根须明确授权。支持安全迁移，但不允许同身份多个副本同时发送。完整服务器用命名卷持久化 SAS / EMQX，备份须包含这些卷及.env。
 
