@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 # 系统架构
 
@@ -21,7 +21,7 @@ last-reviewed: 2026-11-04
 
 sas-init只复制已审核的公开根并在首次创建配置时关闭SAS自动更新，不持有机器凭据或Docker socket。SAS通过显式CLI参数配置同一身份，持久卷独立于Beacon的data。EMQX从第一次启动即配置HTTP认证，SAS失败时拒绝连接；不依靠临时匿名开放安装。
 
-仅Beacon模式不写外部SAS，sas-command只读生成原生/Compose代码。现有管理员必须备份、合并和应用配置，不自动替换已有SAS。
+仅Beacon模式不写外部SAS，sas-command由宿主机脚本只读识别官方SAS容器元数据或原生SAS安装，显式选择后传给Go程序；仅生成对应full-stack/compose/docker/native代码。识别不到或不唯一时，终端选择，非交互明确失败。不把Docker访问能力交给容器。现有管理员必须备份、合并和应用配置，不自动替换已有SAS。
 
 ## 模块
 

@@ -1,11 +1,11 @@
 ---
-last-reviewed: 2026-11-05
+last-reviewed: 2026-11-06
 ---
 # 用广播身份设置SAS
 
 依据[SAS官方README](https://github.com/BG5ESN/fmo-server-authrozier-service/blob/main/README.md)的CLI、配置路径和Compose说明，以及[官方建服教程](https://bg5esn.com/docs/fmo-server-construction/)中的小写sas命令。
 
-先取得并发布广播身份，再运行：
+首次使用先按[README四步流程](../../README.md#已有服务器四步启用广播)申请并等待身份就绪，再运行：
 
 ```sh
 ./beacon.sh sas-command
@@ -13,13 +13,29 @@ last-reviewed: 2026-11-05
 
 命令以只读方式取得当前公开身份，验证证书链、UID/国家/期限、两种哈希及CRL后生成代码。它不会竞争守护进程的状态锁，不保存新状态、不续领凭据、不请求STATION签名、不发APRS，也不修改SAS。当前凭据不可用时明确失败，等待广播程序完成正常续领。
 
-## 生成内容
+## 按实际部署输出
 
-- 原生初始化/启动命令：UID、基础呼号、用户证书指纹、issuerSn取已验证用户身份；MQTT公开地址/端口取本地配置。SSID不进入server.callsign，服务器名称也不是SAS CLI参数。
-- 官方SAS Docker Compose的command数组：保留既有镜像和数据卷，只合并参数；不生成未经核验的镜像版本。官方镜像入口是dotnet sas.dll，Compose的command只填后续参数，不能重复加./sas或在运行中的容器里再启动第二个监听进程。
-- 本项目.env的六个身份/MQTT字段（官方模板使用前五项）：保留其他配置及Dashboard密码；旧持久配置另须核对issuerSn及Http.addr，推荐使用显式command参数。
+默认由宿主机脚本识别运行中的官方SAS容器（镜像和Compose标签），以及活动的原生fmo-sas服务或已安装sas二进制；不根据Beacon运行方式推断，不读取Docker环境变量或挂载Docker socket。
 
-用户证书指纹不能替换成 Root 或 Intermediate 指纹，以命令实时输出为准。
+| 识别结果 | 只输出 |
+|---|---|
+| 本项目完整服务器 | 六项.env字段和启动步骤 |
+| 其他Compose | 原SAS服务的command与重建步骤 |
+| 独立Docker容器 | 镜像之后的启动参数与原卷复用说明 |
+| 原生SAS | 原生参数、系统服务应用方式及认证回调 |
+
+未安装、已停止的容器、自定义镜像、远程SAS或多种方式并存可能无法唯一识别。交互终端会询问部署方式；重定向输出或脚本调用时必须明确指定，避免猜错：
+
+```sh
+./beacon.sh sas-command --deployment full-stack
+./beacon.sh sas-command --deployment compose
+./beacon.sh sas-command --deployment docker
+./beacon.sh sas-command --deployment native
+```
+
+参数选择的是**SAS**，与Beacon是否在Docker运行无关。Go二进制若直接执行，也须明确传入--deployment；自动识别仅在宿主机beacon.sh进行。`--deployment`不会改变实际部署或应用配置，也不自动更新.env。完整服务器首次部署见[教程](full-server.md)。
+
+UID、基础呼号、用户证书指纹、issuerSn取已验证身份；MQTT公开地址/端口取本地配置。SSID不进入server.callsign。用户证书指纹不能换成Root或Intermediate指纹。自定义SAS入口、网络与服务名以实际部署为准。
 
 ## 网络部署区别
 

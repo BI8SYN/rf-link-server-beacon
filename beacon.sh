@@ -9,20 +9,99 @@ if [ "$#" -gt 0 ]; then shift; fi
 case "$BEACON_ACTION" in
   help|-h|--help)
     cat <<'USAGE'
-Usage:
-  ./beacon.sh deploy-docker --callsign BI8SYN --ssid 12 --grid OL15ic --name "RF Link" --host voice.example.com --owner "Owner" --email owner@example.com
-  sudo ./beacon.sh deploy-native --callsign BI8SYN --ssid 12 --grid OL15ic --name "RF Link" --host voice.example.com --owner "Owner" --email owner@example.com
-  ./beacon.sh setup --callsign BI8SYN --ssid 15 --grid FN31pr --name "RF Link" --host voice.example.com --port 1883
-  ./beacon.sh status|wait|doctor|sas-command|once|sync-identity|start|stop|logs
-Setup creates data/config.json, collects applicant name/email and submits directly.
-Application receipts and approved machine credentials are managed automatically. It never sends APRS. Admin review and manual certificate
-signing are required before doctor/once can succeed; start explicitly enables APRS.
-Overrides: BEACON_DATA_DIR, BEACON_NATIVE=1 (local CLI), BEACON_DEV=1 (Docker host network).
+首次Docker接入（先替换YOURCALL及服务器资料）：
+  ./beacon.sh setup --callsign YOURCALL --ssid 12 --grid OL15ic --name "RF Link" --host mqtt.example.com --owner "负责人" --email owner@example.com
+  ./beacon.sh wait
+  ./beacon.sh sas-command [--deployment auto|full-stack|compose|docker|native]
+  按输出配置SAS，验证客户端能登录和收发语音后：
+  ./beacon.sh doctor
+  ./beacon.sh start
+
+管理：./beacon.sh status|logs|stop
+setup和wait不发广播；start才启用每600秒广播。
+从零建服见docs/operations/full-server.md。
+
+其他入口（身份就绪后自动广播，不自动应用SAS）：
+  ./beacon.sh deploy-docker [初始化参数]
+  sudo ./beacon.sh deploy-native [初始化参数]
+覆盖选项：BEACON_DATA_DIR、BEACON_NATIVE=1（本地CLI）、BEACON_DEV=1。
 USAGE
     exit 0 ;;
   deploy-docker|deploy-native|setup|init|enroll|status|wait|doctor|sas-command|once|sync-identity|start|stop|logs|version) ;;
   *) printf '%s\n' 'Unknown command; use ./beacon.sh help' >&2; exit 2 ;;
 esac
+# Detection stays on the host: never give the Beacon container Docker access.
+if [ "$BEACON_ACTION" = sas-command ]; then
+  BEACON_SAS_MODE=auto
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --deployment)
+        [ "$#" -ge 2 ] || { printf '%s\n' '--deployment requires a value' >&2; exit 2; }
+        BEACON_SAS_MODE=$2; shift 2 ;;
+      --deployment=*) BEACON_SAS_MODE=${1#*=}; shift ;;
+      -h|--help)
+        printf '%s\n' '用法：./beacon.sh sas-command [--deployment auto|full-stack|compose|docker|native]' '默认在宿主机识别SAS部署；无法确定时选择。非交互脚本请明确指定。'
+        exit 0 ;;
+      *) printf '%s\n' 'sas-command仅支持--deployment auto|full-stack|compose|docker|native' >&2; exit 2 ;;
+    esac
+  done
+  case "$BEACON_SAS_MODE" in
+    auto|full-stack|compose|docker|native) ;;
+    *) printf '%s\n' '无效--deployment；请选择full-stack、compose、docker或native。' >&2; exit 2 ;;
+  esac
+  if [ "$BEACON_SAS_MODE" = auto ]; then
+    BEACON_SAS_CHOICES=' '
+    BEACON_SAS_CONTAINERS=
+    if command -v docker >/dev/null 2>&1; then
+      BEACON_SAS_CONTAINERS=$(docker ps --format '{{.Image}}|{{.Label "com.docker.compose.service"}}|{{.Label "com.docker.compose.project.working_dir"}}|{{.Label "com.docker.compose.project.config_files"}}' 2>/dev/null) || BEACON_SAS_CONTAINERS=
+    fi
+    while IFS='|' read -r BEACON_SAS_IMAGE BEACON_SAS_SERVICE BEACON_SAS_WORKDIR BEACON_SAS_FILES; do
+      case "$BEACON_SAS_IMAGE" in
+        ghcr.io/bg5esn/fmo-server-authrozier-service:*|ghcr.io/bg5esn/fmo-server-authrozier-service@*)
+          if [ -z "$BEACON_SAS_SERVICE" ]; then
+            BEACON_SAS_CANDIDATE=docker
+          elif [ "$BEACON_SAS_SERVICE" = sas ] && [ "$BEACON_SAS_WORKDIR" = "$BEACON_PROJECT_ROOT" ] && [ "$BEACON_SAS_FILES" = "$BEACON_PROJECT_ROOT/compose.yaml" ]; then
+            BEACON_SAS_CANDIDATE=full-stack
+          else
+            BEACON_SAS_CANDIDATE=compose
+          fi
+          case "$BEACON_SAS_CHOICES" in
+            *" $BEACON_SAS_CANDIDATE "*) ;;
+            *) BEACON_SAS_CHOICES="$BEACON_SAS_CHOICES$BEACON_SAS_CANDIDATE " ;;
+          esac ;;
+      esac
+    done <<SAS_CONTAINERS
+$BEACON_SAS_CONTAINERS
+SAS_CONTAINERS
+    if command -v sas >/dev/null 2>&1 || [ -x ./sas ] || {
+      command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet fmo-sas 2>/dev/null;
+    }; then
+      BEACON_SAS_CHOICES="${BEACON_SAS_CHOICES}native "
+    fi
+    case "$BEACON_SAS_CHOICES" in
+      ' full-stack ') BEACON_SAS_MODE=full-stack ;;
+      ' compose ') BEACON_SAS_MODE=compose ;;
+      ' docker ') BEACON_SAS_MODE=docker ;;
+      ' native ') BEACON_SAS_MODE=native ;;
+      *)
+        if [ ! -t 0 ]; then
+          printf '%s\n' '无法唯一识别SAS部署（可能尚未安装、运行在其他主机或存在多种部署）。请显式使用--deployment full-stack|compose|docker|native。' >&2
+          exit 2
+        fi
+        printf '%s\n' '请选择要配置的SAS：' '  1) 本项目完整服务器' '  2) 其他Docker Compose' '  3) 独立Docker容器' '  4) 原生SAS' >&2
+        printf '输入1–4：' >&2
+        IFS= read -r BEACON_SAS_SELECTION
+        case "$BEACON_SAS_SELECTION" in
+          1) BEACON_SAS_MODE=full-stack ;;
+          2) BEACON_SAS_MODE=compose ;;
+          3) BEACON_SAS_MODE=docker ;;
+          4) BEACON_SAS_MODE=native ;;
+          *) printf '%s\n' '无效选择；也可使用--deployment明确指定。' >&2; exit 2 ;;
+        esac ;;
+    esac
+  fi
+  set -- --deployment "$BEACON_SAS_MODE"
+fi
 if [ "$BEACON_ACTION" = deploy-native ]; then
   [ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] || {
     printf '%s\n' 'deploy-native requires Linux systemd and root; use sudo (macOS supports foreground native commands only).' >&2
@@ -110,9 +189,12 @@ case "$BEACON_ACTION" in
     beacon_run init --data-dir "$BEACON_PROGRAM_DATA" "$@"
     if [ "$BEACON_ACTION" = setup ]; then
       beacon_run enroll --config "$BEACON_PROGRAM_DATA/config.json"
-      printf '%s\n' 'Application submitted; wait for administrator review, manual certificate signing and publication. Use ./beacon.sh wait for automatic credential delivery. No APRS sent.'
+      printf '%s\n' '申请已提交，尚未广播。下一步：./beacon.sh wait' '等待管理员审核、人工签发和发布后，程序会自动领取凭据。'
     fi ;;
-  enroll|status|wait|doctor|sas-command|once) beacon_run "$BEACON_ACTION" --config "$BEACON_PROGRAM_DATA/config.json" "$@" ;;
+  wait)
+    beacon_run wait --config "$BEACON_PROGRAM_DATA/config.json" "$@"
+    printf '%s\n' '身份已就绪，尚未广播。下一步：./beacon.sh sas-command，按提示配置SAS；确认客户端能登录后再运行 ./beacon.sh doctor 和 ./beacon.sh start。' >&2 ;;
+  enroll|status|doctor|sas-command|once) beacon_run "$BEACON_ACTION" --config "$BEACON_PROGRAM_DATA/config.json" "$@" ;;
   sync-identity) beacon_run sync-identity --config "$BEACON_PROGRAM_DATA/config.json" --sas-output "$BEACON_PROGRAM_DATA/sas-config-$(date -u +%Y%m%dT%H%M%SZ).json" "$@" ;;
   version) beacon_run version ;;
   start)

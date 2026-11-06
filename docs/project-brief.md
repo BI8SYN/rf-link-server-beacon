@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-05
+last-reviewed: 2026-11-06
 ---
 # 项目上下文
 
@@ -11,6 +11,8 @@ RF Link Server Beacon 让服务器管理员自助申请广播身份、配置 SAS
 
 广播固定 600 秒，Docker 单 data 挂载，凭据提前续领，进程锁防止同目录重复运行。迁移可复制完整 data，但必须先停止来源。不能承诺宿主机 root 无法复制调用凭据；权限约束须由远端实施。
 
-SAS 与广播使用同一公开身份，`sas-command` 生成部署代码，管理员应用后验证登录。完整栈首次初始化两个公开根，并在 Broker 启动前配置 SAS 认证。FAS 为独立可选审计服务，不属于本项目运行依赖。
+SAS 与广播使用同一公开身份，`sas-command` 在宿主机识别实际SAS部署，只输出该方式的代码；未知或冲突时选择，脚本可用--deployment指定。管理员应用后验证登录。完整栈首次初始化两个公开根，并在 Broker 启动前配置 SAS 认证。FAS 为独立可选审计服务，不属于本项目运行依赖。
 
 源码公开仓库为 https://github.com/BI8SYN/rf-link-server-beacon，采用 MIT。详细能力和限制见[产品需求](spec/product-spec.md)与[交接](handoff.md)。
+
+面向管理员的使用流程不要求完全自动化。README和建服教程只分已有服务器、从零建服两条主线；首次使用先setup/wait，再应用SAS并验证客户端，最后doctor/start。自动启动的deploy入口不作为首次接入的默认推荐。
