@@ -45,3 +45,11 @@ func TestSASDeploymentValidatedBeforeConfigurationRead(t *testing.T) {
 		t.Fatal("deployment accepted on other command")
 	}
 }
+
+func TestSASScenarioRequiredBeforeReadingConfiguration(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := Run([]string{"sas-command", "--config", "/nonexistent/config.json", "--deployment", "native"}, &out, &errOut, "test")
+	if code != 2 || !strings.Contains(errOut.String(), "scenario") {
+		t.Fatal(code, errOut.String())
+	}
+}

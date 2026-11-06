@@ -15,4 +15,10 @@ SAS 与广播使用同一公开身份，`sas-command` 在宿主机识别实际SA
 
 源码公开仓库为 https://github.com/BI8SYN/rf-link-server-beacon，采用 MIT。详细能力和限制见[产品需求](spec/product-spec.md)与[交接](handoff.md)。
 
-面向管理员的使用流程不要求完全自动化。README和建服教程只分已有服务器、从零建服两条主线；首次使用先setup/wait，再应用SAS并验证客户端，最后doctor/start。自动启动的deploy入口不作为首次接入的默认推荐。
+面向管理员的使用流程不要求完全自动化。README和建服教程按新建、兼容扩展和转换三条主线；首次使用先setup/wait，再应用SAS并验证客户端，最后doctor/start。自动启动的deploy入口不作为首次接入的默认推荐。
+
+## 三种业务场景
+
+sas-command必须明确选择new-server、coexist或convert，再确定运行方式。新建默认完整栈；兼容扩展创建独立RF Link SAS与同Broker的新监听端口，原FMO身份/端口/全局认证保持；只有convert才给出备份后替换原SAS身份的步骤，可沿用旧端口且不再保留原FMO身份接入。
+
+compose.sas.yaml只创建新的RF Link SAS，独立卷和HTTP端口；可用compose.sas-network.yaml加入现有Broker网络。EMQX 5.8.9监听器片段通过CLI生成，不自动应用生产配置。受控HTTP后端的双监听正向/错误身份/后端故障、双向消息、ACL和撤回测试通过，真实FMO/RF Link客户端仍须部署者验收。

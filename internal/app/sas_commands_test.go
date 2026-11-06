@@ -20,7 +20,7 @@ func TestSASCommandsAreVerifiedReadOnlyAndWorkWhileDaemonHoldsLock(t *testing.T)
 	if e != nil {
 		t.Fatal(e)
 	}
-	text, e := SASCommands(context.Background(), r.cfg, "full-stack")
+	text, e := SASCommands(context.Background(), r.cfg, "full-stack", SASSetupOptions{Scenario: "new-server"})
 	if e != nil {
 		t.Fatal("command generation cannot run next to live daemon", e)
 	}
@@ -55,7 +55,7 @@ func TestSASCommandsDoesNotCreateCredentialsForPendingIdentity(t *testing.T) {
 		t.Fatal(e)
 	}
 	before, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
-	if _, e := SASCommands(context.Background(), r.cfg, "full-stack"); e == nil {
+	if _, e := SASCommands(context.Background(), r.cfg, "full-stack", SASSetupOptions{Scenario: "new-server"}); e == nil {
 		t.Fatal("pending identity produced setup commands")
 	}
 	after, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
@@ -72,7 +72,7 @@ func TestSASCommandsOnlyShowSelectedDeployment(t *testing.T) {
 			r.mu.Lock()
 			r.info.ServerTime = uint64(time.Now().Unix())
 			r.mu.Unlock()
-			text, err := SASCommands(context.Background(), r.cfg, mode)
+			text, err := SASCommands(context.Background(), r.cfg, mode, SASSetupOptions{Scenario: "convert"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +100,110 @@ func TestSASCommandsOnlyShowSelectedDeployment(t *testing.T) {
 	}
 }
 func TestSASCommandsRejectUnknownDeploymentBeforeNetwork(t *testing.T) {
-	if _, err := SASCommands(context.Background(), config.Config{}, "unknown"); err == nil || !strings.Contains(err.Error(), "deployment") {
+	if _, err := SASCommands(context.Background(), config.Config{}, "unknown", SASSetupOptions{}); err == nil || !strings.Contains(err.Error(), "deployment") {
 		t.Fatal("deployment not validated first", err)
+	}
+}
+
+func TestSASScenariosRequireIntentAndSeparatePorts(t *testing.T) {
+	for _, tc := range []struct {
+		o    SASSetupOptions
+		mode string
+		port uint64
+	}{
+		{SASSetupOptions{}, "native", 1883},
+		{SASSetupOptions{Scenario: "bad"}, "native", 1883},
+		{SASSetupOptions{Scenario: "coexist"}, "compose", 1883},
+		{SASSetupOptions{Scenario: "convert"}, "full-stack", 1883},
+		{SASSetupOptions{Scenario: "coexist", MQTTNetwork: "bad;name"}, "compose", 1884},
+		{SASSetupOptions{Scenario: "coexist", AuthURL: "http://user:secret@host/auth"}, "compose", 1884},
+	} {
+		if err := ValidateSASSetup(tc.o, tc.mode, tc.port); err == nil {
+			t.Fatalf("unsafe setup accepted: %+v", tc)
+		}
+	}
+	if err := ValidateSASSetup(SASSetupOptions{Scenario: "coexist", FMOPort: 1885}, "compose", 1884); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestCoexistGeneratesSeparateSASAndListener(t *testing.T) {
+	for _, mode := range []string{"compose", "native", "docker"} {
+		t.Run(mode, func(t *testing.T) {
+			r, s := newStationRig(t)
+			defer s.Close()
+			r.mu.Lock()
+			r.info.ServerTime = uint64(time.Now().Unix())
+			r.mu.Unlock()
+			r.cfg.Station.Port = 1884
+			before, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
+			text, err := SASCommands(context.Background(), r.cfg, mode, SASSetupOptions{Scenario: "coexist"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{"1884", "listeners.tcp.rf_link", "18081/auth", r.info.Fingerprint} {
+				if !strings.Contains(text, want) {
+					t.Fatal("missing", want, text)
+				}
+			}
+			for _, bad := range []string{"更新原SAS", "合并到原SAS", "重建原SAS"} {
+				if strings.Contains(text, bad) {
+					t.Fatal("coexist would replace FMO", text)
+				}
+			}
+			if mode == "native" && (!strings.Contains(text, ".rf-link-sas/config.json") || !strings.Contains(text, "--http-port 18081")) {
+				t.Fatal("native state is not separate", text)
+			}
+			if mode != "native" && !strings.Contains(text, "compose.sas.yaml") {
+				t.Fatal(text)
+			}
+			after, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
+			if string(before) != string(after) {
+				t.Fatal("state changed")
+			}
+		})
+	}
+}
+func TestCoexistContainerBrokerUsesItsNetwork(t *testing.T) {
+	r, s := newStationRig(t)
+	defer s.Close()
+	r.mu.Lock()
+	r.info.ServerTime = uint64(time.Now().Unix())
+	r.mu.Unlock()
+	r.cfg.Station.Port = 1884
+	text, err := SASCommands(context.Background(), r.cfg, "compose", SASSetupOptions{Scenario: "coexist", MQTTNetwork: "fmo_default"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "http://rf-link-sas:8080/auth") || !strings.Contains(text, "RF_LINK_MQTT_NETWORK=fmo_default") || !strings.Contains(text, "compose.sas-network.yaml") {
+		t.Fatal(text)
+	}
+}
+
+func TestNewServerNeverUsesExistingNativeConfig(t *testing.T) {
+	r, s := newStationRig(t)
+	defer s.Close()
+	r.mu.Lock()
+	r.info.ServerTime = uint64(time.Now().Unix())
+	r.mu.Unlock()
+	text, err := SASCommands(context.Background(), r.cfg, "native", SASSetupOptions{Scenario: "new-server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, `--config "$HOME/.rf-link-sas/config.json"`) || !strings.Contains(text, `--roots-dir "$HOME/.rf-link-sas/roots"`) {
+		t.Fatal(text)
+	}
+}
+func TestConvertExplicitlyDisclosesIdentityReplacement(t *testing.T) {
+	r, s := newStationRig(t)
+	defer s.Close()
+	r.mu.Lock()
+	r.info.ServerTime = uint64(time.Now().Unix())
+	r.mu.Unlock()
+	text, err := SASCommands(context.Background(), r.cfg, "compose", SASSetupOptions{Scenario: "convert"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "先备份") || !strings.Contains(text, "不再保留原FMO身份") || strings.Contains(text, "listeners.tcp.rf_link") {
+		t.Fatal(text)
 	}
 }

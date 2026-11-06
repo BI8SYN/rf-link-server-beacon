@@ -31,3 +31,9 @@ docker compose -f compose.beacon.yaml config --quiet
 CI 使用临时密钥和回环服务，禁止生产申请、签名及 APRS 发报。个人运维资料留在忽略的 data/，不能发布到源码或镜像。不要操作生产 CA；实际生产发报或服务变更需明确授权。
 
 2026-11-06流程调整：优先简单教程，无需全自动应用SAS。首次接入使用setup/wait、sas-command配置、客户端验证、doctor/start四步；README不再先推荐身份就绪后自动发报的deploy-docker。脚本setup/wait成功提示下一步，仍不发报。
+
+## 三种业务场景
+
+sas-command必须明确选择new-server、coexist或convert，再确定运行方式。新建默认完整栈；兼容扩展创建独立RF Link SAS与同Broker的新监听端口，原FMO身份/端口/全局认证保持；只有convert才给出备份后替换原SAS身份的步骤，可沿用旧端口且不再保留原FMO身份接入。
+
+compose.sas.yaml只创建新的RF Link SAS，独立卷和HTTP端口；可用compose.sas-network.yaml加入现有Broker网络。EMQX 5.8.9监听器片段通过CLI生成，不自动应用生产配置。受控HTTP后端的双监听正向/错误身份/后端故障、双向消息、ACL和撤回测试通过，真实FMO/RF Link客户端仍须部署者验收。

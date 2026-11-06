@@ -19,7 +19,7 @@ func Run(args []string, out, errOut io.Writer, version string) int {
 }
 func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(out, "Usage: rf-link-server-beacon <init|version|status|enroll|wait|doctor|sas-command|sync-identity|once|run|serve> [--config FILE] [--send] [--sas-output FILE] [--deployment full-stack|compose|docker|native]")
+		fmt.Fprintln(out, "Usage: rf-link-server-beacon <init|version|status|enroll|wait|doctor|sas-command|sync-identity|once|run|serve> [--config FILE] [--send] [--sas-output FILE] [--scenario new-server|coexist|convert] [--deployment full-stack|compose|docker|native]")
 		return 0
 	}
 	cmd := args[0]
@@ -47,6 +47,11 @@ func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version
 	send := flags.Bool("send", false, "explicitly publish to configured APRS-IS")
 	sas := flags.String("sas-output", "", "new absolute SAS configuration file")
 	deployment := flags.String("deployment", "", "SAS deployment: full-stack|compose|docker|native")
+	scenario := flags.String("scenario", "", "new-server|coexist|convert")
+	fmoPort := flags.Uint64("fmo-port", 0, "existing FMO MQTT port (default 1883)")
+	httpPort := flags.Uint64("sas-http-port", 0, "new SAS host HTTP port (default 18081)")
+	mqttNetwork := flags.String("mqtt-network", "", "existing Broker Docker network")
+	authURL := flags.String("auth-url", "", "Broker callback to the new SAS")
 	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 {
 		fmt.Fprintln(errOut, "invalid arguments; use --config FILE, --send, --sas-output FILE, or --deployment for the corresponding operation")
 		return 2
@@ -55,7 +60,7 @@ func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version
 		fmt.Fprintln(errOut, "--config FILE is required")
 		return 2
 	}
-	if (*send && cmd != "run" && cmd != "serve" && cmd != "once") || (*sas != "" && cmd != "sync-identity") || (*deployment != "" && cmd != "sas-command") {
+	if (*send && cmd != "run" && cmd != "serve" && cmd != "once") || (*sas != "" && cmd != "sync-identity") || ((*deployment != "" || *scenario != "" || *fmoPort != 0 || *httpPort != 0 || *mqttNetwork != "" || *authURL != "") && cmd != "sas-command") {
 		fmt.Fprintln(errOut, "option is not supported for this command")
 		return 2
 	}
@@ -67,11 +72,10 @@ func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version
 		fmt.Fprintln(errOut, "sync-identity requires --sas-output with a new absolute path")
 		return 2
 	}
+	options := app.SASSetupOptions{Scenario: *scenario, FMOPort: *fmoPort, HTTPPort: *httpPort, MQTTNetwork: *mqttNetwork, AuthURL: *authURL}
 	if cmd == "sas-command" {
-		switch *deployment {
-		case "full-stack", "compose", "docker", "native":
-		default:
-			fmt.Fprintln(errOut, "使用 ./beacon.sh sas-command 自动识别，或 --deployment full-stack|compose|docker|native")
+		if err := app.ValidateSASSetup(options, *deployment, 0); err != nil {
+			fmt.Fprintln(errOut, err)
 			return 2
 		}
 	}
@@ -83,7 +87,7 @@ func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if cmd == "sas-command" {
-		text, err := app.SASCommands(ctx, cfg, *deployment)
+		text, err := app.SASCommands(ctx, cfg, *deployment, options)
 		if err != nil {
 			fmt.Fprintln(errOut, err)
 			return 1

@@ -3,11 +3,13 @@ last-reviewed: 2026-11-06
 ---
 # 部署、备份与迁移
 
-新建 MQTT / SAS 见[完整服务器教程](full-server.md)；只加广播见[README](../../README.md)。所有命令在源码目录执行，Docker Compose v2 为必需。首次构建需下载固定 Go 镜像，运行镜像不含凭据或源码。
+> 先选择[新建](full-server.md)、[保留FMO增加入口](coexist.md)或[转换](convert.md)。只有明确转换才替换原SAS身份；兼容扩展必须新增独立SAS和监听器。
+
+新建MQTT / SAS见[完整服务器教程](full-server.md)，其他场景见[README](../../README.md)。所有命令在源码目录执行，Docker Compose v2 为必需。首次构建需下载固定 Go 镜像，运行镜像不含凭据或源码。
 
 ## 广播服务
 
-首次接入请按[README四步流程](../../README.md#已有服务器四步启用广播)：setup/wait → 配置SAS → 客户端验证 → doctor/start；这些手工步骤不要求全自动。
+首次接入请按[README选定场景](../../README.md)：setup/wait → 配置SAS → 客户端验证 → doctor/start；这些手工步骤不要求全自动。
 
 `deploy-docker` 一行初始化并后台运行，身份就绪后会自动广播，不自动应用SAS，仅在已准备好SAS身份或明确接受该行为时使用；已有 `data/config.json` 时不重新初始化，不允许额外初始化参数。`setup` 只初始化并提交申请；`wait` 等待审核并领取；`start` 明确启用广播；`once` 请求签名但不发送，`once --send` 才发一条。`doctor` 校验证书链和 CRL，不发报。`sync-identity` 导出新 SAS 候选文件，不覆盖实际服务。`sas-command` 在宿主机识别实际SAS部署，仅读取公开身份并生成该方式的代码，可与广播守护进程同时运行；非交互脚本使用 `--deployment full-stack|compose|docker|native`。
 

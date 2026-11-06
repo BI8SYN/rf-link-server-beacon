@@ -12,7 +12,7 @@ case "$BEACON_ACTION" in
 首次Docker接入（先替换YOURCALL及服务器资料）：
   ./beacon.sh setup --callsign YOURCALL --ssid 12 --grid OL15ic --name "RF Link" --host mqtt.example.com --owner "负责人" --email owner@example.com
   ./beacon.sh wait
-  ./beacon.sh sas-command [--deployment auto|full-stack|compose|docker|native]
+  ./beacon.sh sas-command   # 选择：新建 / 保留FMO增加入口 / 转换
   按输出配置SAS，验证客户端能登录和收发语音后：
   ./beacon.sh doctor
   ./beacon.sh start
@@ -33,18 +33,55 @@ esac
 # Detection stays on the host: never give the Beacon container Docker access.
 if [ "$BEACON_ACTION" = sas-command ]; then
   BEACON_SAS_MODE=auto
+  BEACON_SCENARIO=
+  BEACON_FMO_PORT=0
+  BEACON_SAS_HTTP_PORT=0
+  BEACON_MQTT_NETWORK=
+  BEACON_SAS_AUTH_URL=
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --scenario|--fmo-port|--sas-http-port|--mqtt-network|--auth-url)
+        [ "$#" -ge 2 ] || { printf '%s\n' "Missing value: $1" >&2; exit 2; }
+        case "$1" in
+          --scenario) BEACON_SCENARIO=$2 ;;
+          --fmo-port) BEACON_FMO_PORT=$2 ;;
+          --sas-http-port) BEACON_SAS_HTTP_PORT=$2 ;;
+          --mqtt-network) BEACON_MQTT_NETWORK=$2 ;;
+          --auth-url) BEACON_SAS_AUTH_URL=$2 ;;
+        esac
+        shift 2 ;;
+      --scenario=*) BEACON_SCENARIO=${1#*=}; shift ;;
       --deployment)
         [ "$#" -ge 2 ] || { printf '%s\n' '--deployment requires a value' >&2; exit 2; }
         BEACON_SAS_MODE=$2; shift 2 ;;
       --deployment=*) BEACON_SAS_MODE=${1#*=}; shift ;;
       -h|--help)
-        printf '%s\n' '用法：./beacon.sh sas-command [--deployment auto|full-stack|compose|docker|native]' '默认在宿主机识别SAS部署；无法确定时选择。非交互脚本请明确指定。'
+        printf '%s\n' '用法：./beacon.sh sas-command --scenario new-server|coexist|convert [--deployment auto|full-stack|compose|docker|native]' 'coexist可指定--fmo-port、--sas-http-port、--mqtt-network或--auth-url。' '不带场景时由终端选择；非交互脚本须明确指定。'
         exit 0 ;;
-      *) printf '%s\n' 'sas-command仅支持--deployment auto|full-stack|compose|docker|native' >&2; exit 2 ;;
+      *) printf '%s\n' '无效参数，见 ./beacon.sh sas-command --help' >&2; exit 2 ;;
     esac
   done
+  if [ -z "$BEACON_SCENARIO" ]; then
+    [ -t 0 ] || { printf '%s\n' '必须明确--scenario new-server|coexist|convert，不能根据原SAS猜测是否替换FMO身份。' >&2; exit 2; }
+    printf '%s\n' '请选择目标：' '  1) 新建RF Link服务器' '  2) 保留FMO，增加RF Link入口' '  3) 将FMO转换为RF Link（先备份，不保留原FMO身份）' >&2
+    printf '输入1–3：' >&2
+    IFS= read -r BEACON_SCENARIO_SELECTION
+    case "$BEACON_SCENARIO_SELECTION" in
+      1) BEACON_SCENARIO=new-server ;;
+      2) BEACON_SCENARIO=coexist ;;
+      3) BEACON_SCENARIO=convert ;;
+      *) printf '%s\n' '无效场景。' >&2; exit 2 ;;
+    esac
+  fi
+  case "$BEACON_SCENARIO" in new-server|coexist|convert) ;; *) printf '%s\n' '无效--scenario。' >&2; exit 2 ;; esac
+  # Creating a new SAS must not be inferred from the existing FMO container.
+  if [ "$BEACON_SAS_MODE" = auto ] && [ "$BEACON_SCENARIO" != convert ]; then
+    if command -v docker >/dev/null 2>&1; then
+      if [ "$BEACON_SCENARIO" = coexist ]; then BEACON_SAS_MODE=compose; else BEACON_SAS_MODE=full-stack; fi
+    else
+      BEACON_SAS_MODE=native
+    fi
+  fi
   case "$BEACON_SAS_MODE" in
     auto|full-stack|compose|docker|native) ;;
     *) printf '%s\n' '无效--deployment；请选择full-stack、compose、docker或native。' >&2; exit 2 ;;
@@ -100,7 +137,11 @@ SAS_CONTAINERS
         esac ;;
     esac
   fi
-  set -- --deployment "$BEACON_SAS_MODE"
+  set -- --deployment "$BEACON_SAS_MODE" --scenario "$BEACON_SCENARIO"
+  if [ "$BEACON_FMO_PORT" != 0 ]; then set -- "$@" --fmo-port "$BEACON_FMO_PORT"; fi
+  if [ "$BEACON_SAS_HTTP_PORT" != 0 ]; then set -- "$@" --sas-http-port "$BEACON_SAS_HTTP_PORT"; fi
+  if [ -n "$BEACON_MQTT_NETWORK" ]; then set -- "$@" --mqtt-network "$BEACON_MQTT_NETWORK"; fi
+  if [ -n "$BEACON_SAS_AUTH_URL" ]; then set -- "$@" --auth-url "$BEACON_SAS_AUTH_URL"; fi
 fi
 if [ "$BEACON_ACTION" = deploy-native ]; then
   [ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ] || {

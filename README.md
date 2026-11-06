@@ -4,61 +4,32 @@
 
 广播私钥由远端 Trust 托管，本机只保存申请回执、受限调用凭据和公开证书。公告名称、地址和位置由你管理；修改本地配置并重启即可。支持 Docker 和 Linux systemd。
 
-## 选择你的情况
+## 先选择目标
 
-| 当前情况 | 跟着哪份教程操作 |
-|---|---|
-| 已有能用的 MQTT / SAS 服务器 | 下方四步，给原服务器增加广播 |
-| 还没有服务器，想从零搭建 | [完整服务器教程](docs/operations/full-server.md)，含 EMQX + SAS Compose |
+| 目标 | 使用教程 | SAS和MQTT怎么处理 |
+|---|---|---|
+| 新建RF Link服务器 | [新建教程](docs/operations/full-server.md) | 新部署MQTT + RF Link SAS |
+| 保留FMO，同时增加RF Link | [兼容扩展](docs/operations/coexist.md) | 原FMO不变，新增独立SAS和MQTT监听端口，广播新端口 |
+| 将FMO转换为RF Link | [转换教程](docs/operations/convert.md) | 备份后替换原SAS身份，可沿用原MQTT端口，不再保留旧FMO身份接入 |
 
-两条流程都是：**申请身份 → 配置 SAS → 验证客户端 → 开始广播**。首次配置完成前使用 `setup`，最后再用 `start` 启用广播。
-
-## 已有服务器：四步启用广播
-
-需要 Git、Docker 和 Docker Compose v2。在服务器终端下载源码：
+先安装Git、Docker和Compose v2并获取源码：
 
 ```sh
 git clone https://github.com/BI8SYN/rf-link-server-beacon.git
 cd rf-link-server-beacon
 ```
 
-### 1. 申请身份并等待签发
+三条流程都只有四步：**申请/等待 → 按提示配置 → 验证客户端 → 开始广播**。跟着所选教程填自己的呼号、SSID、网格和服务器资料即可；UID、指纹自动生成。
 
-替换以下呼号、网格、服务器地址和负责人资料。`YOURCALL` 必须换成自己的基础呼号，不包含 SSID。
-
-```sh
-./beacon.sh setup --callsign YOURCALL --ssid 12 --grid OL15ic --name "RF Link" --host mqtt.example.com --port 1883 --owner "负责人姓名" --email owner@example.com
-./beacon.sh wait
-```
-
-申请需要 Trust 管理员审核、人工签发和发布。`wait` 会等待并自动领取凭据，显示 `ready: true` 后继续。这两条命令都不发广播；需要中断等待时按 Ctrl-C；之后回到本目录再次运行 `wait` 即可，不用重新申请。
-
-### 2. 按提示配置原 SAS
+取得身份后运行 `./beacon.sh sas-command`，终端会先问你选哪种场景。脚本调用请明确指定：
 
 ```sh
-./beacon.sh sas-command
+./beacon.sh sas-command --scenario new-server
+./beacon.sh sas-command --scenario coexist
+./beacon.sh sas-command --scenario convert
 ```
 
-程序识别实际 SAS 部署，只给对应的命令和操作说明；识别不到时选择你的部署方式。按输出更新原 SAS 并重启，保留原数据和信任根。UID、证书指纹等已自动填好，不用自己计算。此命令只生成配置，不会替你应用。
-
-### 3. 验证服务器
-
-用自己的合法 FMO / RF Link 客户端连接 `mqtt.example.com:1883`，确认能登录、收发语音，再检查广播身份：
-
-```sh
-./beacon.sh doctor
-```
-
-客户端登录或检查失败时，先按[SAS 配置说明](docs/operations/sas-setup.md)排查，成功后再继续。
-
-### 4. 启动广播
-
-```sh
-./beacon.sh start
-./beacon.sh logs
-```
-
-这一步才开始每 600 秒广播。容器故障或主机重启后自动恢复，只持久化一个 `data/` 目录。
+只有选择convert才提供替换原身份的步骤。程序只生成配置，不自动修改Broker或SAS。`setup` / `wait`不广播；客户端验证完成后才执行 `./beacon.sh doctor` 和 `./beacon.sh start`。
 
 ## 日常管理
 
@@ -87,7 +58,7 @@ cd rf-link-server-beacon
 
 ## 其他部署方式
 
-支持 Linux systemd 原生部署，以及已有完整身份时的一行 Docker 部署，见[部署说明](docs/operations/deployment.md)。`deploy-docker` / `deploy-native` 会在身份就绪后自动广播，**不会自动配置 SAS**，首次接入推荐使用上方四步。
+支持 Linux systemd 原生部署，以及已有完整身份时的一行 Docker 部署，见[部署说明](docs/operations/deployment.md)。`deploy-docker` / `deploy-native` 会在身份就绪后自动广播，**不会自动配置 SAS**，新建服务器按完整服务器教程操作；兼容扩展和转换分别按对应教程操作。
 
 ## 证书、凭据与迁移
 

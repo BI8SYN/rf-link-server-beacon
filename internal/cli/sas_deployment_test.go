@@ -22,6 +22,8 @@ func TestSASCommandHostDetectionAndExplicitOverride(t *testing.T) {
 		{name: "other-compose", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6|sas|/srv/other", want: "compose"},
 		{name: "standalone-container", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6||", want: "docker"},
 		{name: "native", native: true, want: "native"},
+		{name: "coexist-ignores-old-sas", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6|sas|/srv/fmo", args: []string{"--scenario", "coexist"}, want: "compose"},
+		{name: "invalid-scenario", args: []string{"--scenario", "bad"}, fail: true},
 		{name: "beacon-docker-is-not-sas", containers: "rf-link-beacon:dev|beacon|" + root, fail: true},
 		{name: "unknown", fail: true},
 		{name: "ambiguous", native: true, containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6|sas|/srv/other", fail: true},
@@ -49,7 +51,11 @@ func TestSASCommandHostDetectionAndExplicitOverride(t *testing.T) {
 			if tc.native {
 				native = "1"
 			}
-			args := append([]string{filepath.Join(root, "beacon.sh"), "sas-command"}, tc.args...)
+			scenario := "convert"
+			if tc.want == "full-stack" {
+				scenario = "new-server"
+			}
+			args := append([]string{filepath.Join(root, "beacon.sh"), "sas-command", "--scenario", scenario}, tc.args...)
 			cmd := exec.Command("/bin/sh", args...)
 			cmd.Env = append(os.Environ(), "PATH="+bin+":/usr/bin:/bin", "BEACON_NATIVE=1", "BEACON_BINARY="+filepath.Join(bin, "beacon"), "BEACON_DATA_DIR="+filepath.Join(dir, "data"), "TEST_NATIVE_SAS="+native, "TEST_CONTAINERS="+tc.containers, "TEST_DOCKER_LOG="+log)
 			out, e := cmd.CombinedOutput()
