@@ -5,6 +5,15 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      SAS_SERVER_UID: '20'
+      SAS_SERVER_CALLSIGN: AB1CD
+      SAS_MQTT_HOST: mqtt.example.com
+      SAS_MQTT_PORT: '1884'
+      SAS_CERT_FINGERPRINT: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      SAS_ISSUER_SN: '10'
+      EMQX_DASHBOARD_PASSWORD: ci-config-validation-only
+      RF_LINK_MQTT_NETWORK: test-mqtt-network
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -15,15 +24,10 @@ jobs:
       - run: go mod verify
       - run: sh -n beacon.sh
       - run: docker compose config --quiet
-        env:
-          SAS_SERVER_UID: '20'
-          SAS_SERVER_CALLSIGN: AB1CD
-          SAS_MQTT_HOST: mqtt.example.com
-          SAS_MQTT_PORT: '1883'
-          SAS_CERT_FINGERPRINT: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-          SAS_ISSUER_SN: '10'
-          EMQX_DASHBOARD_PASSWORD: ci-config-validation-only
       - run: docker compose -f compose.beacon.yaml config --quiet
       - run: docker compose -f compose.beacon.yaml -f compose.dev.yaml config --quiet
       - run: docker build -t beacon-check .
       - run: docker run --rm --network none beacon-check version
+      - run: docker compose -f compose.sas.yaml config --quiet
+      - run: docker compose -f compose.sas.yaml -f compose.sas-network.yaml config --quiet
+      - run: python3 tools/coexist-smoke.py

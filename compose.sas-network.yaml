@@ -1,0 +1,9 @@
+# Optional: attach the NEW SAS to the existing Broker's Docker network.
+services:
+  rf-link-sas:
+    networks:
+      - existing-mqtt
+networks:
+  existing-mqtt:
+    external: true
+    name: ${RF_LINK_MQTT_NETWORK:?Set the existing MQTT Docker network}

@@ -8,3 +8,5 @@ bin
 **/*.pem
 **/*.key
 **/*.zip
+
+.env.*
