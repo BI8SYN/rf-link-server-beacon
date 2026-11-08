@@ -45,3 +45,21 @@ func TestSASDeploymentValidatedBeforeConfigurationRead(t *testing.T) {
 		t.Fatal("deployment accepted on other command")
 	}
 }
+
+func TestSASScenarioRequiredBeforeReadingConfiguration(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := Run([]string{"sas-command", "--config", "/nonexistent/config.json", "--deployment", "native"}, &out, &errOut, "test")
+	if code != 2 || !strings.Contains(errOut.String(), "scenario") {
+		t.Fatal(code, errOut.String())
+	}
+}
+
+func TestRetiredSASOptionsFailBeforeReadingConfiguration(t *testing.T) {
+	for _, extra := range [][]string{{"--scenario", "convert"}, {"--fmo-port", "1883"}, {"--sas-http-port", "18081"}, {"--mqtt-network", "old"}, {"--auth-url", "http://127.0.0.1/auth"}} {
+		var out, errOut bytes.Buffer
+		args := append([]string{"sas-command", "--config", "/nonexistent/config.json", "--deployment", "native"}, extra...)
+		if code := Run(args, &out, &errOut, "test"); code != 2 {
+			t.Fatal("retired option not rejected before config", extra, code, errOut.String())
+		}
+	}
+}

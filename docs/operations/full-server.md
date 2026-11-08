@@ -1,15 +1,15 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
-# 从零搭建 FMO / RF Link 服务器
+# 完全新建 RF Link 服务器
 
 跟着四步完成：**申请身份 → 启动 SAS / MQTT → 验证客户端 → 广播**。只需填写呼号、SSID、网格、服务器资料和负责人信息，SAS 的 UID、指纹等由程序生成。
 
-已有能用的服务器请走[README 的已有服务器流程](../../README.md#已有服务器四步启用广播)，不必重建。
+已有FMO服务器请使用[已有FMO教程](coexist.md)：在原SAS添加信任和RF Link Cluster，共用现有地址和端口。
 
 ## 准备
 
-服务器安装 Git、Docker、Docker Compose v2。准备客户端能访问的域名或公网地址，将域名解析到本机，并在云安全组和防火墙开放 TCP 1883。本教程使用普通 MQTT 1883。
+服务器安装 Git、Docker、Docker Compose v2。准备客户端能访问的域名或公网地址，将域名解析到本机，先在云安全组或覆盖Docker流量的防火墙中仅允许验收客户端访问TCP 1883，验证后再按运营策略放行。本教程使用普通 MQTT 1883。
 
 ```sh
 git clone https://github.com/BI8SYN/rf-link-server-beacon.git
@@ -29,11 +29,11 @@ cd rf-link-server-beacon
 
 ## 2. 生成配置并启动服务器
 
-以下是**首次部署**命令，会生成 `.env`，不需要手抄 UID 或指纹；已有 `.env` 时不要覆盖，改用 `sas-command --deployment full-stack` 显示结果后合并 SAS 字段。
+以下是**首次部署**命令，会生成 `.env`，不需要手抄 UID 或指纹；已有 `.env` 时不要覆盖，改用 `sas-command --scenario new-server --deployment full-stack` 显示结果后合并 SAS 字段。
 
 ```sh
 umask 077
-./beacon.sh sas-command --deployment full-stack > .env
+./beacon.sh sas-command --scenario new-server --deployment full-stack > .env
 ```
 
 确认命令成功、`.env` 中包含六项 `SAS_` 配置后，用编辑器打开它，在末尾添加一行自己的随机长密码：
@@ -60,7 +60,7 @@ docker compose up -d --wait
 ./beacon.sh doctor
 ```
 
-容器 healthy 不代表客户端已通过认证。登录或检查失败时先排查，不要跳过这一步。
+容器healthy或端口已监听都不代表HTTP认证已就绪。EMQX 5.8.9冷启动存在先监听、后安装认证hook的上游窗口；quick_deny_anonymous只能提前拒绝无用户名连接。维护期间限制外部接入，验证合法登录与错误/匿名登录拒绝后再正式放行。每次Broker冷启动均须考虑该限制，冷启动时携带非空假用户名仍可能在认证hook装载前被接受。本项目没有实现外部启动流量门禁。
 
 ## 4. 开始广播
 
@@ -88,12 +88,12 @@ SAS 8080 不对公网开放，管理后台只绑定本机 `http://127.0.0.1:1808
 ssh -L 18083:127.0.0.1:18083 user@your-server
 ```
 
-服务器已占用 1883 时不要重复部署另一套 Broker，使用[已有服务器流程](../../README.md#已有服务器四步启用广播)。原生安装、混合网络见[SAS 配置](sas-setup.md)；TLS、FAS 审计等扩展见下方官方资料。
+服务器已占用 1883 时不要重复部署另一套 Broker，不要用本教程覆盖原服务，请使用[已有FMO教程](coexist.md)。原生安装、混合网络见[SAS 配置](sas-setup.md)；TLS、FAS 审计等扩展见下方官方资料。
 
 备份应包含 `.env`、完整 `data/` 及 SAS / EMQX 两个命名卷。`docker compose down` 保留命名卷，**不要用 `down -v` 作为停止命令，它会删除服务器数据**。升级与迁移见[运维说明](deployment.md)。
 
 ## 使用官方教程建服
 
-也可以先按[FMO 官方建服教程](https://bg5esn.com/docs/fmo-server-construction/)安装 MQTT 与 SAS，最后按本仓库[已有服务器流程](../../README.md#已有服务器四步启用广播)申请身份，运行 `./beacon.sh sas-command`，将生成的配置应用到原 SAS，验证后再启动广播。
+[FMO 官方建服教程](https://bg5esn.com/docs/fmo-server-construction/)可用于了解官方安装。已有FMO服务器只需按[已有FMO教程](coexist.md)使用我们的SAS配置代码追加RF Link身份和信任，保留原主身份及MQTT入口。
 
 [SAS 官方仓库](https://github.com/BG5ESN/fmo-server-authrozier-service) · [可选 FAS 审计教程](https://bg5esn.com/docs/fmo-fas-install-guide/)

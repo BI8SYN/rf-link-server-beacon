@@ -20,7 +20,7 @@ func TestSASCommandsAreVerifiedReadOnlyAndWorkWhileDaemonHoldsLock(t *testing.T)
 	if e != nil {
 		t.Fatal(e)
 	}
-	text, e := SASCommands(context.Background(), r.cfg, "full-stack")
+	text, e := SASCommands(context.Background(), r.cfg, "full-stack", SASSetupOptions{Scenario: "new-server"})
 	if e != nil {
 		t.Fatal("command generation cannot run next to live daemon", e)
 	}
@@ -55,7 +55,7 @@ func TestSASCommandsDoesNotCreateCredentialsForPendingIdentity(t *testing.T) {
 		t.Fatal(e)
 	}
 	before, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
-	if _, e := SASCommands(context.Background(), r.cfg, "full-stack"); e == nil {
+	if _, e := SASCommands(context.Background(), r.cfg, "full-stack", SASSetupOptions{Scenario: "new-server"}); e == nil {
 		t.Fatal("pending identity produced setup commands")
 	}
 	after, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
@@ -64,43 +64,87 @@ func TestSASCommandsDoesNotCreateCredentialsForPendingIdentity(t *testing.T) {
 	}
 }
 
-func TestSASCommandsOnlyShowSelectedDeployment(t *testing.T) {
+func TestSASCommandsRejectUnknownDeploymentBeforeNetwork(t *testing.T) {
+	if _, err := SASCommands(context.Background(), config.Config{}, "unknown", SASSetupOptions{}); err == nil || !strings.Contains(err.Error(), "deployment") {
+		t.Fatal("deployment not validated first", err)
+	}
+}
+
+func TestSASTwoScenarios(t *testing.T) {
+	for _, scenario := range []string{"", "bad", "convert"} {
+		if err := ValidateSASSetup(SASSetupOptions{Scenario: scenario}, "native", 1883); err == nil {
+			t.Fatal("retired scenario accepted", scenario)
+		}
+	}
+	if err := ValidateSASSetup(SASSetupOptions{Scenario: "coexist"}, "full-stack", 1883); err == nil {
+		t.Fatal("coexist creates broker")
+	}
+	for _, mode := range []string{"native", "compose", "docker"} {
+		if err := ValidateSASSetup(SASSetupOptions{Scenario: "coexist"}, mode, 1883); err != nil {
+			t.Fatal("shared port rejected", err)
+		}
+	}
+}
+func TestCoexistAddsIdentityToExistingSAS(t *testing.T) {
 	for _, mode := range []string{"native", "compose", "docker"} {
 		t.Run(mode, func(t *testing.T) {
-			r, service := newStationRig(t)
-			defer service.Close()
+			r, s := newStationRig(t)
+			defer s.Close()
 			r.mu.Lock()
 			r.info.ServerTime = uint64(time.Now().Unix())
 			r.mu.Unlock()
-			text, err := SASCommands(context.Background(), r.cfg, mode)
+			before, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
+			text, err := SASCommands(context.Background(), r.cfg, mode, SASSetupOptions{Scenario: "coexist"})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(text, "SAS_SERVER_UID=") {
-				t.Fatal("unrelated env instructions")
+			for _, want := range []string{"tools/sas-config.py", `"uid":20`, `"callsign":"BI8SYN"`, `"mqtt_host":"voice.example.com"`, `"mqtt_port":1883`, `"certFingerprint":"` + r.info.Fingerprint + `"`, "Mqtt.Clusters", "AllowIssuerSn", "保留原"} {
+				if !strings.Contains(text, want) {
+					t.Fatal("missing", want, text)
+				}
 			}
-			if !strings.Contains(text, "20") || !strings.Contains(text, r.info.Fingerprint) {
-				t.Fatal("missing identity")
+			for _, bad := range []string{"--server-uid", "listeners.tcp", "compose.sas", "1884", "18081", localToken} {
+				if strings.Contains(text, bad) {
+					t.Fatal("unsafe/unrelated output", bad, text)
+				}
 			}
 			switch mode {
 			case "native":
-				if !strings.Contains(text, "./sas --server-uid 20") || strings.Contains(text, "services:") {
+				if !strings.Contains(text, "systemctl restart") || strings.Contains(text, "docker cp") {
 					t.Fatal(text)
 				}
 			case "compose":
-				if !strings.Contains(text, "command:") || strings.Contains(text, "./sas --") {
+				if !strings.Contains(text, "docker compose restart") || strings.Contains(text, "systemctl restart") {
 					t.Fatal(text)
 				}
 			case "docker":
-				if !strings.Contains(text, "--server-uid 20") || strings.Contains(text, "services:") || strings.Contains(text, "./sas --") {
+				if !strings.Contains(text, "docker restart") || strings.Contains(text, "docker compose restart") {
 					t.Fatal(text)
 				}
+			}
+			after, _ := os.ReadFile(filepath.Join(s.cfg.StateDir, "state.json"))
+			if string(before) != string(after) {
+				t.Fatal("runtime state changed")
+			}
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if len(r.requests) != 0 {
+				t.Fatal("requested signature")
 			}
 		})
 	}
 }
-func TestSASCommandsRejectUnknownDeploymentBeforeNetwork(t *testing.T) {
-	if _, err := SASCommands(context.Background(), config.Config{}, "unknown"); err == nil || !strings.Contains(err.Error(), "deployment") {
-		t.Fatal("deployment not validated first", err)
+func TestNewServerNeverUsesExistingNativeConfig(t *testing.T) {
+	r, s := newStationRig(t)
+	defer s.Close()
+	r.mu.Lock()
+	r.info.ServerTime = uint64(time.Now().Unix())
+	r.mu.Unlock()
+	text, err := SASCommands(context.Background(), r.cfg, "native", SASSetupOptions{Scenario: "new-server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, `--config "$HOME/.rf-link-sas/config.json"`) || !strings.Contains(text, `--roots-dir "$HOME/.rf-link-sas/roots"`) {
+		t.Fatal(text)
 	}
 }

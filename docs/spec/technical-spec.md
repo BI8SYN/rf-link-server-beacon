@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 # 技术约束
 
@@ -17,3 +17,5 @@ last-reviewed: 2026-11-06
 - 不做真实人数监测的第一版可使用明确标记的静态 0/0；不能伪造实时统计。若接 EMQX API，单独受限令牌，不共享 Dashboard 管理密码。
 
 - sas-command部署识别在宿主机脚本完成，仅查询docker ps的镜像/Compose标签及本机SAS安装状态；不读取容器环境变量、不挂载socket。Go CLI仅接受明确部署类型，不把Beacon的容器环境作为SAS拓扑依据。
+
+- SAS生成先校验scenario，仅new-server/coexist；coexist复用同SAS同端点，输出Mqtt.Clusters五字段（uid、callsign、mqtt_host、mqtt_port、certFingerprint）。离线候选生成用Python 3标准库，JSON键无歧义，保留原Server、管理员、Trust、HTTP及其他/未知字段；拒绝主UID/现存节点冲突、端点不匹配和覆盖已有文件，0600输出。管理员检查后手工应用到实际持久卷并重启原SAS；旧转换/新监听参数拒绝，CI不访问生产设施。

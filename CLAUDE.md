@@ -10,7 +10,7 @@
 | 需求与技术约束 | docs/spec/product-spec.md、docs/spec/technical-spec.md |
 | 架构与决策 | docs/architecture/overview.md、docs/adr/README.md |
 | HTTP与协议 | docs/contracts/remote-signer-v1.md、docs/protocol/fmo-v4-station.md |
-| 安装与服务器 | docs/operations/deployment.md、docs/operations/full-server.md、docs/operations/sas-setup.md |
+| 安装与服务器 | docs/operations/deployment.md、docs/operations/full-server.md、docs/operations/coexist.md、docs/operations/sas-setup.md |
 | 验收 | docs/development/open-source-validation.md |
 | 本地技能 | .agents/skills/、.claude/skills/ |
 

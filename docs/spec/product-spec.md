@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 # 产品需求
 
@@ -13,13 +13,23 @@ last-reviewed: 2026-11-06
 
 持久快照包含原 CERT/链/两种哈希、身份与完整请求。断线重试保持原 ID 和正文，不混用轮换后的证书；吊销、过期、未知根、错误 SIG 或错配不得发送。进程恢复不追补积压，只发送当前有效公告。统计首版固定 0/0。
 
-## 部署
+## 部署场景
 
-首次部署的推荐流程为setup/wait → sas-command → 应用SAS并验证客户端 → doctor/start。无需全自动配置；教程按已有服务器和从零建服分流，只保留完成当前步骤所需说明。deploy-docker/deploy-native身份就绪后自动发报，不自动应用SAS，不能作为首次配置的无条件推荐入口。
+### 新建RF Link服务器
 
-Docker 与原生 Linux systemd 提供源码目录一行入口。已有服务器只增加 Beacon；新服务器提供 EMQX + 官方 SAS 的 Compose 与完整教程。SAS 不开放公网端口，Broker 启动前配置 HTTP 认证，缺少必填身份或 Dashboard 密码即失败。SAS 配置代码自动使用广播身份，按实际SAS部署方式只输出对应参数和步骤。宿主机识别运行中的完整栈/Compose/独立容器及本机原生SAS，未知或多种部署并存时选择；非交互环境须明确指定--deployment。不能根据Beacon运行方式推断SAS，也不挂载Docker socket。
+使用独立EMQX + RF Link SAS + Beacon。RF Link公开身份用于该SAS，公告端口与它认证的MQTT端口一致。支持Docker及Linux原生运行；完整栈Compose为新建服务器入口。
 
-一个 data 目录保存广播状态；默认根随发行包交付，其他根须明确授权。支持安全迁移，但不允许同身份多个副本同时发送。完整服务器用命名卷持久化 SAS / EMQX，备份须包含这些卷及.env。
+### 已有FMO：信任并添加RF Link广播
+
+保留原SAS主UID、指纹、管理员、根、数据以及原MQTT地址、端口和认证回调。在同一SAS的Mqtt.Clusters追加RF Link目标身份，并加入明确认可的RF Link根；不新建SAS或MQTT监听器。非空AllowIssuerSn须明确允许新签发者，不能清空旧限制。所有身份共享根、issuer过滤及管理员/角色策略，须检查跨CA的UID冲突及权限。
+
+生成工具只写新的候选文件，不覆盖原配置，不修改服务或自动迁移旧双SAS实例。保留未知字段、其他Cluster和全部主身份；同身份重复运行幂等，冲突明确失败。证书轮换仅修改对应Cluster的指纹。
+
+### 操作流程与验收
+
+仅选择new-server或coexist，再识别SAS运行方式（Compose/Docker/原生）。首次流程为申请/等待 → 安装信任并配置身份 → 验证客户端 → doctor/start。只填写必要资料；UID、指纹等从已验证身份生成。转换及双SAS入口移除。
+
+已有FMO验收覆盖：原FMO和RF Link通过相同端口合法登录、房间消息和语音；错误身份/匿名拒绝；现有ACL/FAS与权限正确；撤回新Cluster后原FMO继续使用。容器healthy或SAS配置加载不能代替合法客户端验收。
 
 ## 运维与非目标
 

@@ -14,3 +14,9 @@ bin/
 *.tar.gz
 *.tar
 *.bak
+
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
