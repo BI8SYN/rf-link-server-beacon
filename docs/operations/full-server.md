@@ -1,11 +1,11 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
-# 从零搭建 FMO / RF Link 服务器
+# 完全新建 RF Link 服务器
 
 跟着四步完成：**申请身份 → 启动 SAS / MQTT → 验证客户端 → 广播**。只需填写呼号、SSID、网格、服务器资料和负责人信息，SAS 的 UID、指纹等由程序生成。
 
-已有FMO服务器请先看[兼容扩展设计](../plans/2026-11-06-fmo-coexistence.md)。它需要同一Broker新增端口及独立RF Link SAS，不能用本教程替换原服务器。见[保留FMO增加RF Link教程](coexist.md)；若要放弃原FMO身份，见[转换教程](convert.md)。
+已有FMO服务器请使用[已有FMO教程](coexist.md)：在原SAS添加信任和RF Link Cluster，共用现有地址和端口。
 
 ## 准备
 
@@ -29,7 +29,7 @@ cd rf-link-server-beacon
 
 ## 2. 生成配置并启动服务器
 
-以下是**首次部署**命令，会生成 `.env`，不需要手抄 UID 或指纹；已有 `.env` 时不要覆盖，改用 `sas-command --deployment full-stack` 显示结果后合并 SAS 字段。
+以下是**首次部署**命令，会生成 `.env`，不需要手抄 UID 或指纹；已有 `.env` 时不要覆盖，改用 `sas-command --scenario new-server --deployment full-stack` 显示结果后合并 SAS 字段。
 
 ```sh
 umask 077
@@ -60,7 +60,7 @@ docker compose up -d --wait
 ./beacon.sh doctor
 ```
 
-容器healthy或端口已监听都不代表HTTP认证已就绪。EMQX 5.8.9冷启动存在先监听、后安装认证hook的上游窗口；quick_deny_anonymous只能提前拒绝无用户名连接。维护期间限制外部接入，验证合法登录与错误/匿名登录拒绝后再正式放行。每次Broker冷启动均须考虑该限制，详见[启动边界](coexist.md#emqx-589冷启动边界)。本项目没有实现外部启动流量门禁。
+容器healthy或端口已监听都不代表HTTP认证已就绪。EMQX 5.8.9冷启动存在先监听、后安装认证hook的上游窗口；quick_deny_anonymous只能提前拒绝无用户名连接。维护期间限制外部接入，验证合法登录与错误/匿名登录拒绝后再正式放行。每次Broker冷启动均须考虑该限制，冷启动时携带非空假用户名仍可能在认证hook装载前被接受。本项目没有实现外部启动流量门禁。
 
 ## 4. 开始广播
 
@@ -88,12 +88,12 @@ SAS 8080 不对公网开放，管理后台只绑定本机 `http://127.0.0.1:1808
 ssh -L 18083:127.0.0.1:18083 user@your-server
 ```
 
-服务器已占用 1883 时不要重复部署另一套 Broker，不要用本教程覆盖原服务，先看[兼容扩展设计](../plans/2026-11-06-fmo-coexistence.md)。原生安装、混合网络见[SAS 配置](sas-setup.md)；TLS、FAS 审计等扩展见下方官方资料。
+服务器已占用 1883 时不要重复部署另一套 Broker，不要用本教程覆盖原服务，请使用[已有FMO教程](coexist.md)。原生安装、混合网络见[SAS 配置](sas-setup.md)；TLS、FAS 审计等扩展见下方官方资料。
 
 备份应包含 `.env`、完整 `data/` 及 SAS / EMQX 两个命名卷。`docker compose down` 保留命名卷，**不要用 `down -v` 作为停止命令，它会删除服务器数据**。升级与迁移见[运维说明](deployment.md)。
 
 ## 使用官方教程建服
 
-[FMO 官方建服教程](https://bg5esn.com/docs/fmo-server-construction/)可用于了解官方安装。已经按它运行的FMO服务器，要兼容RF Link时必须新增独立SAS和MQTT端口，保留原FMO身份和认证。如果明确放弃旧FMO身份，可按[转换教程](convert.md)备份后更换原SAS身份。
+[FMO 官方建服教程](https://bg5esn.com/docs/fmo-server-construction/)可用于了解官方安装。已有FMO服务器只需按[已有FMO教程](coexist.md)使用我们的SAS配置代码追加RF Link身份和信任，保留原主身份及MQTT入口。
 
 [SAS 官方仓库](https://github.com/BG5ESN/fmo-server-authrozier-service) · [可选 FAS 审计教程](https://bg5esn.com/docs/fmo-fas-install-guide/)

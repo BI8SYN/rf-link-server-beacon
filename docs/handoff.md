@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 # 开发交接
 
@@ -32,8 +32,10 @@ CI 使用临时密钥和回环服务，禁止生产申请、签名及 APRS 发�
 
 2026-11-06流程调整：优先简单教程，无需全自动应用SAS。首次接入使用setup/wait、sas-command配置、客户端验证、doctor/start四步；README不再先推荐身份就绪后自动发报的deploy-docker。脚本setup/wait成功提示下一步，仍不发报。
 
-## 三种业务场景
+## 两种部署场景
 
-sas-command必须明确选择new-server、coexist或convert，再确定运行方式。新建默认完整栈；兼容扩展创建独立RF Link SAS与同Broker的新监听端口，原FMO身份/端口/全局认证保持；只有convert才给出备份后替换原SAS身份的步骤，可沿用旧端口且不再保留原FMO身份接入。
+仅保留new-server完全新建和coexist已有FMO。新建Docker使用完整EMQX/SAS栈；已有FMO保留原主身份和管理员，在原SAS的Mqtt.Clusters追加RF Link目标身份，共用原MQTT地址和端口，根及认证策略共享。
 
-compose.sas.yaml只创建新的RF Link SAS，独立卷和HTTP端口；可用compose.sas-network.yaml加入现有Broker网络。EMQX 5.8.9监听器片段通过CLI生成，不自动应用生产配置。受控HTTP后端的双监听正向/错误身份/后端故障、双向消息、ACL和撤回测试通过，真实FMO/RF Link客户端仍须部署者验收。
+sas-command在兼容模式识别原SAS部署，仅输出对应类型的配置步骤。tools/sas-config.py离线生成候选，只追加一个Cluster，保留原配置其他字段；拒绝UID/指纹冲突、端点不匹配、歧义键和已有输出文件，不自动应用。管理员备份、安装认可根、按需扩展非空AllowIssuerSn、检查差异后仅重启原SAS。证书轮换只更新对应Cluster指纹，不能用独立SAS导出配置覆盖原FMO配置。
+
+转换入口、双SAS Compose和新监听器生成已移除，旧实例不自动迁移或删除。隔离容器配置加载测试与真实客户端/语音验收是不同范围，后者须部署者自行验证。

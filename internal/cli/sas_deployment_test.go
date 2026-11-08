@@ -22,7 +22,11 @@ func TestSASCommandHostDetectionAndExplicitOverride(t *testing.T) {
 		{name: "other-compose", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6|sas|/srv/other", want: "compose"},
 		{name: "standalone-container", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6||", want: "docker"},
 		{name: "native", native: true, want: "native"},
-		{name: "coexist-ignores-old-sas", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6|sas|/srv/fmo", args: []string{"--scenario", "coexist"}, want: "compose"},
+		{name: "coexist-detects-old-sas", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6|sas|/srv/fmo", args: []string{"--scenario", "coexist"}, want: "compose"},
+		{name: "coexist-own-stack", containers: "ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6|sas|" + root + "|" + root + "/compose.yaml", want: "compose"},
+		{name: "coexist-full-stack-rejected", args: []string{"--scenario", "coexist", "--deployment", "full-stack"}, fail: true},
+		{name: "retired-convert", args: []string{"--scenario", "convert"}, fail: true},
+		{name: "retired-port", args: []string{"--fmo-port", "1883"}, fail: true},
 		{name: "invalid-scenario", args: []string{"--scenario", "bad"}, fail: true},
 		{name: "beacon-docker-is-not-sas", containers: "rf-link-beacon:dev|beacon|" + root, fail: true},
 		{name: "unknown", fail: true},
@@ -51,7 +55,7 @@ func TestSASCommandHostDetectionAndExplicitOverride(t *testing.T) {
 			if tc.native {
 				native = "1"
 			}
-			scenario := "convert"
+			scenario := "coexist"
 			if tc.want == "full-stack" {
 				scenario = "new-server"
 			}
@@ -68,7 +72,7 @@ func TestSASCommandHostDetectionAndExplicitOverride(t *testing.T) {
 			if e != nil || !strings.Contains(string(out), "--deployment "+tc.want) {
 				t.Fatalf("wrong deployment: %s %v", out, e)
 			}
-			if len(tc.args) > 0 {
+			if strings.Contains(strings.Join(tc.args, " "), "--deployment") {
 				if b, _ := os.ReadFile(log); len(b) != 0 {
 					t.Fatal("explicit selection probed Docker")
 				}

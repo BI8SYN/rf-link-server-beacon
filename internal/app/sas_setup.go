@@ -1,119 +1,63 @@
 package app
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"regexp"
 	"strconv"
-	"strings"
 )
 
-type SASSetupOptions struct {
-	Scenario    string
-	FMOPort     uint64
-	HTTPPort    uint64
-	MQTTNetwork string
-	AuthURL     string
-}
+type SASSetupOptions struct{ Scenario string }
 
-func (o SASSetupOptions) fmoPort() uint64 {
-	if o.FMOPort == 0 {
-		return 1883
-	}
-	return o.FMOPort
-}
-func (o SASSetupOptions) httpPort() uint64 {
-	if o.HTTPPort == 0 {
-		return 18081
-	}
-	return o.HTTPPort
-}
-
-var networkName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
-
-// ValidateSASSetup runs before any identity request; port=0 validates CLI flags only.
-func ValidateSASSetup(o SASSetupOptions, deployment string, port uint64) error {
+// ValidateSASSetup runs before any identity request.
+func ValidateSASSetup(o SASSetupOptions, deployment string, _ uint64) error {
 	switch deployment {
 	case "full-stack", "compose", "docker", "native":
 	default:
 		return errors.New("deployment must be full-stack|compose|docker|native")
 	}
 	switch o.Scenario {
-	case "new-server", "coexist", "convert":
+	case "new-server", "coexist":
 	default:
-		return errors.New("scenario required: new-server|coexist|convert")
+		return errors.New("scenario required: new-server|coexist (convert retired)")
 	}
 	if deployment == "full-stack" && o.Scenario != "new-server" {
-		return errors.New("full-stack only supports new-server; use a separate SAS for coexist or the existing SAS for convert")
-	}
-	if o.fmoPort() > 65535 || o.httpPort() > 65535 {
-		return errors.New("invalid FMO or SAS HTTP port")
-	}
-	if o.Scenario != "coexist" && (o.FMOPort != 0 || o.HTTPPort != 0 || o.MQTTNetwork != "" || o.AuthURL != "") {
-		return errors.New("FMO port, HTTP port, MQTT network and auth URL options only apply to coexist")
-	}
-	if o.Scenario == "coexist" && port != 0 && port == o.fmoPort() {
-		return errors.New("coexist requires a new MQTT port; edit server.port in data/config.json (do not re-enroll), or specify the actual --fmo-port")
-	}
-	if o.MQTTNetwork != "" && (!networkName.MatchString(o.MQTTNetwork) || deployment == "native") {
-		return errors.New("invalid Docker MQTT network or native/network combination")
-	}
-	if o.AuthURL != "" {
-		u, e := url.Parse(o.AuthURL)
-		if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.Path != "/auth" || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(o.AuthURL, "\r\n\x00") {
-			return errors.New("auth URL must be http(s)://host[:port]/auth without credentials, query or fragment")
-		}
+		return errors.New("full-stack only supports new-server; coexist uses the existing SAS")
 	}
 	return nil
 }
 
-//go:embed assets/rf-link-listener.hocon.tmpl
-var listenerTemplate string
-
-// ListenerHOCON is an additive fragment, not a replacement Broker configuration.
-func ListenerHOCON(port uint64, authURL string) string {
-	encoded, _ := json.Marshal(authURL)
-	return fmt.Sprintf(listenerTemplate, port, encoded)
-}
-
-func coexistCommands(o SASSetupOptions, deployment, uid, callsign, host, port, fp, issuer, rootNote string) string {
-	authURL := o.AuthURL
-	if authURL == "" {
-		authURL = fmt.Sprintf("http://127.0.0.1:%d/auth", o.httpPort())
-		if o.MQTTNetwork != "" {
-			authURL = "http://rf-link-sas:8080/auth"
-		}
-	}
-	var output string
+func coexistCommands(deployment, uid, callsign, host, port, fp, issuer, rootNote string) string {
+	id, _ := strconv.ParseUint(uid, 10, 64)
+	p, _ := strconv.ParseUint(port, 10, 64)
+	cluster, _ := json.Marshal(struct {
+		UID         uint64 `json:"uid"`
+		Callsign    string `json:"callsign"`
+		Host        string `json:"mqtt_host"`
+		Port        uint64 `json:"mqtt_port"`
+		Fingerprint string `json:"certFingerprint"`
+	}{id, callsign, host, p, fp})
+	output := "# 已有FMO：保留原主身份、管理员及MQTT端口，向同一SAS的Mqtt.Clusters追加RF Link身份。\n# 在本仓库目录执行；需要Python 3。先替换实际配置路径，并备份原SAS配置及根目录。\numask 077\n"
+	source := `"$SAS_CONFIG"`
 	if deployment == "native" {
-		output = fmt.Sprintf(`# 保留原FMO SAS、端口和身份；新建独立RF Link SAS。
-# 在本仓库目录准备新的Root目录：
-mkdir -p "$HOME/.rf-link-sas/roots"
-cp deploy/trust/roots/*.json "$HOME/.rf-link-sas/roots/"
-# 在SAS二进制目录运行，或将此命令作为新的独立系统服务（勿修改原FMO服务）：
-./sas --config "$HOME/.rf-link-sas/config.json" --roots-dir "$HOME/.rf-link-sas/roots" --server-uid %s --server-callsign %s --mqtt-host %s --mqtt-port %s --cert-fingerprint %s --issuer-sn %s --http-addr 127.0.0.1 --http-port %d
-# 原生SAS默认仅适用于同宿主机原生Broker。其他拓扑须配置受限可达监听，再显式指定--auth-url。
-`, uid, callsign, host, port, fp, issuer, o.httpPort()) + rootNote
+		output += "SAS_CONFIG='/替换为原SAS实际配置路径/config.json'\n"
 	} else {
-		output = fmt.Sprintf(`# 保留原FMO服务；以下SAS字段保存到新文件.env.rflink，不覆盖原.env。
-SAS_SERVER_UID=%s
-SAS_SERVER_CALLSIGN=%s
-SAS_MQTT_HOST=%s
-SAS_MQTT_PORT=%s
-SAS_CERT_FINGERPRINT=%s
-SAS_ISSUER_SN=%s
-RF_LINK_SAS_HTTP_PORT=%d
-`, uid, callsign, host, port, fp, issuer, o.httpPort())
-		if o.MQTTNetwork != "" {
-			output += "RF_LINK_MQTT_NETWORK=" + o.MQTTNetwork + "\n# 启动新的RF Link SAS（加入原MQTT容器网络）：\n# docker compose --env-file .env.rflink -f compose.sas.yaml -f compose.sas-network.yaml up -d --wait\n"
+		output += "SAS_CONTAINER='替换为原SAS容器名'\nSAS_CONFIG='/替换为容器内实际配置路径/config.json'\n# 配置路径以原进程--config或启动日志为准，必须位于持久卷。\ndocker cp \"$SAS_CONTAINER:$SAS_CONFIG\" data/sas-config.original.json\nchmod 600 data/sas-config.original.json\n"
+		source = "data/sas-config.original.json"
+	}
+	output += fmt.Sprintf("python3 tools/sas-config.py --source %s --output data/sas-config.rflink.json --cluster '%s'\n", source, cluster)
+	output += "# 输出文件已存在时拒绝覆盖；保留旧候选/备份，改用新的输出文件名。\n"
+	output += fmt.Sprintf("# 在原SAS的实际Trust.RootsDir加入deploy/trust/roots/rf-link-root-production-v1.json。\n# Trust.AllowIssuerSn非空时须明确允许RF Link签发者 %s，保留已有条目；不自动清空限制。\n", issuer) + rootNote
+	output += "# 核对差异：仅Mqtt.Clusters追加以上五字段；确认原Server及其他策略保持。\n"
+	if deployment == "native" {
+		output += "diff -u \"$SAS_CONFIG\" data/sas-config.rflink.json\n# 确认后，将候选内容写回原文件（保留文件属主/权限），再重启原服务：\n# sudo sh -c 'cat data/sas-config.rflink.json > \"$1\"' sh \"$SAS_CONFIG\"\n# sudo systemctl restart 原SAS服务名\n"
+	} else {
+		output += "diff -u data/sas-config.original.json data/sas-config.rflink.json\n# 确认后，将候选内容写回原持久卷内配置，保留文件属主/权限：\n# docker exec -i \"$SAS_CONTAINER\" sh -c 'cat > \"$1\"' sh \"$SAS_CONFIG\" < data/sas-config.rflink.json\n"
+		if deployment == "compose" {
+			output += "# 在原SAS的Compose项目目录，仅重启原SAS服务：\n# docker compose restart 原SAS服务名\n"
 		} else {
-			output += "# 启动新的RF Link SAS（适用于同宿主机原生MQTT）：\n# docker compose --env-file .env.rflink -f compose.sas.yaml up -d --wait\n# MQTT在Docker内时，重新生成并加--mqtt-network 原Broker网络名。\n"
+			output += "# docker restart \"$SAS_CONTAINER\"\n"
 		}
 	}
-	return output + fmt.Sprintf("\n# 增量添加到原EMQX 5.8.9的配置；原FMO端口%d保持不变。\n", o.fmoPort()) + ListenerHOCON(parsePort(port), authURL) + "# Docker Broker还需在原Compose发布新端口 " + port + ":" + port + "；防火墙仅放行新MQTT端口。\n# 备份后应用增量配置，验证旧FMO和新RF Link登录、消息收发，再启用广播。\n"
+	return output + "# MQTT认证回调保持原样；两种身份共享根和认证策略。验证原FMO及RF Link客户端登录/语音后，再doctor/start。\n"
 }
-
-func parsePort(s string) uint64 { p, _ := strconv.ParseUint(s, 10, 16); return p }

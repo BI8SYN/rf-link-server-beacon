@@ -1,8 +1,10 @@
 ---
 last-reviewed: 2026-11-06
-status: superseded-by-three-scenarios
+status: superseded-by-single-sas
 ---
 # FMO与RF Link双入口兼容扩展
+
+> 历史方案，已由[两场景单SAS方案](2026-11-07-single-sas.md)替代，不作为部署操作依据。
 
 ## 修正背景
 

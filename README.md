@@ -9,8 +9,7 @@
 | 目标 | 使用教程 | SAS和MQTT怎么处理 |
 |---|---|---|
 | 新建RF Link服务器 | [新建教程](docs/operations/full-server.md) | 新部署MQTT + RF Link SAS |
-| 保留FMO，同时增加RF Link | [兼容扩展](docs/operations/coexist.md) | 原FMO不变，新增独立SAS和MQTT监听端口，广播新端口 |
-| 将FMO转换为RF Link | [转换教程](docs/operations/convert.md) | 备份后替换原SAS身份，可沿用原MQTT端口，不再保留旧FMO身份接入 |
+| 已有FMO，信任并增加RF Link广播 | [已有FMO教程](docs/operations/coexist.md) | 保留原主身份，同SAS追加RF Link Cluster，共用原MQTT地址和端口 |
 
 先安装Git、Docker和Compose v2并获取源码：
 
@@ -19,17 +18,16 @@ git clone https://github.com/BI8SYN/rf-link-server-beacon.git
 cd rf-link-server-beacon
 ```
 
-三条流程都只有四步：**申请/等待 → 按提示配置 → 验证客户端 → 开始广播**。跟着所选教程填自己的呼号、SSID、网格和服务器资料即可；UID、指纹自动生成。
+两条流程都只有四步：**申请/等待 → 按提示配置 → 验证客户端 → 开始广播**。跟着所选教程填自己的呼号、SSID、网格和服务器资料即可；UID、指纹自动生成。
 
 取得身份后运行 `./beacon.sh sas-command`，终端会先问你选哪种场景。脚本调用请明确指定：
 
 ```sh
 ./beacon.sh sas-command --scenario new-server
 ./beacon.sh sas-command --scenario coexist
-./beacon.sh sas-command --scenario convert
 ```
 
-只有选择convert才提供替换原身份的步骤。程序只生成配置，不自动修改Broker或SAS。`setup` / `wait`不广播；客户端验证完成后才执行 `./beacon.sh doctor` 和 `./beacon.sh start`。
+已有FMO使用单SAS多身份，生成候选配置供管理员核对，不替换原主身份。程序只生成配置，不自动修改Broker或SAS。`setup` / `wait`不广播；客户端验证完成后才执行 `./beacon.sh doctor` 和 `./beacon.sh start`。
 
 ## 日常管理
 
@@ -58,7 +56,7 @@ cd rf-link-server-beacon
 
 ## 其他部署方式
 
-支持 Linux systemd 原生部署，以及已有完整身份时的一行 Docker 部署，见[部署说明](docs/operations/deployment.md)。`deploy-docker` / `deploy-native` 会在身份就绪后自动广播，**不会自动配置 SAS**，新建服务器按完整服务器教程操作；兼容扩展和转换分别按对应教程操作。
+支持 Linux systemd 原生部署，以及已有完整身份时的一行 Docker 部署，见[部署说明](docs/operations/deployment.md)。`deploy-docker` / `deploy-native` 会在身份就绪后自动广播，**不会自动配置 SAS**，新建服务器按完整服务器教程操作；已有FMO按兼容教程追加身份。
 
 ## 证书、凭据与迁移
 

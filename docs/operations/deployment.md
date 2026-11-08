@@ -1,9 +1,9 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 # 部署、备份与迁移
 
-> 先选择[新建](full-server.md)、[保留FMO增加入口](coexist.md)或[转换](convert.md)。只有明确转换才替换原SAS身份；兼容扩展必须新增独立SAS和监听器。
+> 先选择[完全新建](full-server.md)或[已有FMO](coexist.md)。已有FMO在原SAS追加RF Link Cluster并安装认可根，保留主身份、端口及认证回调。
 
 新建MQTT / SAS见[完整服务器教程](full-server.md)，其他场景见[README](../../README.md)。所有命令在源码目录执行，Docker Compose v2 为必需。首次构建需下载固定 Go 镜像，运行镜像不含凭据或源码。
 

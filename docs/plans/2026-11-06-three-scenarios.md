@@ -1,7 +1,10 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
+status: superseded-by-single-sas
 ---
 # 三种部署场景实施计划
+
+> 历史方案，已由[两场景单SAS方案](2026-11-07-single-sas.md)替代，不作为部署操作依据。
 
 已由所有者确认三种业务场景：new-server新建、coexist保留FMO并新增RF Link、convert将FMO转为RF Link。运行方式单独选择；不能因发现原SAS容器就授权替换它。
 

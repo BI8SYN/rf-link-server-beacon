@@ -1,58 +1,62 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
-# 保留FMO，同时增加RF Link
+# 已有 FMO：信任并添加 RF Link 广播
 
-保留原FMO的SAS、UID/指纹、MQTT端口和认证配置。在**同一Broker**新增RF Link端口，由一个新SAS认证，广播这个新端口。示例原端口1883、新端口1884。
+继续使用原来的 MQTT 和 SAS，在原 SAS 的 `Mqtt.Clusters` 中追加 RF Link 服务器身份，广播原来的公开地址和端口。原 FMO 主身份、管理员和客户端入口保留。
 
-下面的监听器模板已在 **EMQX 5.8.9** 验证。其他版本或Broker不要直接套用；先确认支持独立监听器认证。不创建第二个Broker，也不修改全局authentication/authorization。
+需要支持 Cluster 目标身份的 SAS；本项目使用官方 1.0.6 验证配置加载。如果旧版不支持，先单独安排升级并验证原 FMO；不要覆盖原主身份。两个身份共用根、签发者限制和认证策略，无法分别设置隔离的信任域。
 
-## 1. 申请新入口的身份
+## 1. 申请身份
 
-安装Git、Docker及Compose v2，下载本仓库，在仓库目录执行：
+安装 Git、Docker、Compose v2 和 Python 3，下载本仓库。在仓库目录执行，填写**现有服务器的公开地址和端口**，选择未使用的 SSID：
 
 ```sh
-./beacon.sh setup --callsign YOURCALL --ssid 12 --grid OL15ic --name "RF Link" --host mqtt.example.com --port 1884 --owner "负责人" --email owner@example.com
+./beacon.sh setup --callsign YOURCALL --ssid 12 --grid OL15ic --name "RF Link" --host mqtt.example.com --port 1883 --owner "负责人" --email owner@example.com
 ./beacon.sh wait
 ```
 
-替换呼号、网格及服务器资料。等待审核签发，看到ready后继续。这时不广播。已有申请不必重申请，只需将 `data/config.json` 的 `server.port` 改为新端口。
+等待审核、人工签发和发布，看到 `ready: true` 后继续；这时不广播。已有身份保留完整 `data/`，不用重新申请。
 
-## 2. 生成新SAS和新监听器配置
-
-如果原MQTT在宿主机原生运行：
+## 2. 给原 SAS 增加信任和身份
 
 ```sh
-./beacon.sh sas-command --scenario coexist > data/rflink-setup.txt
+./beacon.sh sas-command --scenario coexist
 ```
 
-如果原MQTT在Docker，先查看它的网络名（替换原MQTT容器名），再生成：
+程序识别原 SAS 是 Compose、独立 Docker 还是原生服务，仅显示该方式的操作代码。无法唯一识别时选择，脚本可用 `--deployment compose|docker|native` 明确指定。没有 Docker 访问权限时在宿主机以有权限的账号执行，或明确运行方式。
+
+按输出完成下面三件事：
+
+1. 找到原进程**实际生效**的配置和 `Trust.RootsDir`，备份配置、根目录及启动配置。原生看 systemd 的 `ExecStart` / `--config` 及启动日志；Docker 看原 Compose、卷映射和容器启动日志，路径是容器内的。不要用当前登录账号的默认 `~/.sas` 猜测服务路径。
+2. 把仓库的 `deploy/trust/roots/rf-link-root-production-v1.json` 加入实际根目录，保留原 FMO 根。确认是下表的认可根；已有同名文件时先比较，不盲目覆盖。若 `Trust.AllowIssuerSn` 非空，还须明确允许输出中的 RF Link 中间 CA 序列号，保留已有条目；空数组表示不限制签发者。不要为接入而清空原限制。
+3. 运行输出中的 `python3 tools/sas-config.py ...`，生成 `data/sas-config.rflink.json`。工具只追加 Cluster，不更改原文件；核对差异后按输出注释写回原配置，并**仅重启原 SAS**。Docker 配置和根必须位于原持久卷，保留文件属主/权限；若为只读挂载，在宿主机修改对应源文件再重启。Broker 端口、认证回调和网络保持原样。
+
+| 认可的 RF Link Root | 值 |
+|---|---|
+| TBS 指纹 | `lPu5cTZM9fOEgCw7nM8GjFPsdV7z8TXEU1QWHOytzow` |
+| 文件 SHA-256 | `3b253cd8124342104f997b817574ff071d8f40c9a7638a012632296622722917` |
+
+复制根的命令，根据原 SAS 所在位置执行一种（先替换实际路径/容器名）：
 
 ```sh
-docker inspect --format '{{json .NetworkSettings.Networks}}' 原MQTT容器名
-./beacon.sh sas-command --scenario coexist --mqtt-network 原MQTT网络名 > data/rflink-setup.txt
+# 原生：SAS_ROOTS为运行中的SAS实际Trust.RootsDir
+sudo cp deploy/trust/roots/rf-link-root-production-v1.json "$SAS_ROOTS/"
 ```
-
-查看 `data/rflink-setup.txt`。仅首次部署时提取新的SAS配置，**不覆盖原FMO的.env**：
 
 ```sh
-umask 077
-sed -n '/^SAS_/p;/^RF_LINK_/p' data/rflink-setup.txt > .env.rflink
+# Docker：SAS_ROOTS为容器内实际Trust.RootsDir，且位于持久卷
+# Docker Compose也可使用docker cp，不需要进入容器找shell。
+docker cp deploy/trust/roots/rf-link-root-production-v1.json "$SAS_CONTAINER:$SAS_ROOTS/rf-link-root-production-v1.json"
 ```
 
-按生成结果中的启动命令运行专用 `compose.sas.yaml`；MQTT在Docker时该命令会同时使用 `compose.sas-network.yaml`。它只启动RF Link SAS，拥有独立卷和项目名，不启动MQTT或修改原SAS。原生SAS方案可显式加 `--deployment native`，按输出新建独立配置与守护服务，不修改原FMO服务。
+候选包含准确的五个 Cluster 字段：`uid`、`callsign`、`mqtt_host`、`mqtt_port`、`certFingerprint`。UID 和指纹来自已验证证书，不能填原 FMO UID。工具会拒绝不同端点、UID/指纹冲突、歧义 JSON 和已有输出文件；相同条目不重复添加。已有候选时保留备份、换一个输出文件名即可。原配置需要root权限读取时，为候选工具及diff命令加sudo；不要更改原配置的访问权限。
 
-## 3. 给原MQTT增加一个监听入口
+如果此前按旧教程用了新端口或双 SAS，先单独备份和确认原主身份，修改本地 `server.host/port` 为原入口，按本流程迁入；客户端验收后再人工撤下旧附加服务。新版不会自动删除旧服务、卷或端口。
 
-先备份原Broker的实际生效配置、Compose及原SAS配置。将生成结果的 `listeners.tcp.rf_link { ... }` **增量合并**到原EMQX实际生效的HOCON配置，保留全部其他内容。不要把整份结果当作配置覆盖，也不要将认证器加入全局数组。若已有同名监听器，先核对其用途，不能盲目覆盖。
+## 3. 验证，再广播
 
-Docker Broker还需在原Compose的MQTT服务中**追加** `"1884:1884"` 端口映射，保留原映射、镜像、卷及网络。放行新端口防火墙；SAS HTTP端口不要公开到互联网。配置应用方式以现有部署为准，优先在已就绪的Broker中增量加载；若必须重建/重启，安排维护窗口，仅放行验收客户端IP，待认证正向与错误身份拒绝均验证后再恢复正式接入。
-
-新SAS、MQTT监听器、端口映射和公告的公开端口均应对应1884。原FMO端口不是1883时，生成命令加 `--fmo-port 实际旧端口`；新SAS本机HTTP端口18081被占用时加 `--sas-http-port 其他空闲端口`。不要靠端口映射复用旧监听器，它仍会使用旧认证。
-
-## 4. 两边都验收，再广播
-
-确认：原FMO客户端仍从旧端口登录、收发语音；RF Link客户端从新端口登录、收发语音；同房间跨端口互通与原ACL行为正确；已有FAS时也要验证它不会误封新入口。检查错误身份/匿名登录应被拒绝。Docker healthy不代表真实客户端已通过。
+查看原 SAS 重启日志，确认原 FMO 主 UID/指纹仍在，并加载新 RF Link Cluster 和两个认可根。用合法 FMO、RF Link 客户端分别通过**同一地址和端口**登录并验证语音和房间消息；检查错误身份、匿名连接被拒绝，原 ACL/FAS 行为符合预期。共享信任可能导致跨 CA 的用户 UID 与管理员策略相互影响，须核验实际权限，不能仅凭 healthy 判定成功。
 
 ```sh
 ./beacon.sh doctor
@@ -60,16 +64,14 @@ Docker Broker还需在原Compose的MQTT服务中**追加** `"1884:1884"` 端口�
 ./beacon.sh logs
 ```
 
-从这一步开始广播新端口。未通过实际客户端验收前不要start。
+从 `start` 开始，每 600 秒广播一次。`doctor` 只检查广播身份/链/CRL，不代替 SAS 客户端验收。
 
-## 撤回与备份
+## 备份、轮换与撤回
 
-先 `./beacon.sh stop`，移除新增的rf_link监听器/端口映射并按原部署应用，然后用原来的专用Compose命令 `down` 停止RF Link SAS。不要删原FMO卷或执行原项目的 `down -v`。保留 `.env.rflink`、SAS卷和完整 `data/`；独立SAS停止后，旧FMO服务应仍能认证。
+保存原 SAS 配置与根目录、候选配置、启动配置和完整 Beacon `data/`。迁移先停止源实例再复制，不能同时运行同一身份的两个广播副本。
 
-模板只生成配置，不自动连接管理API或修改原Broker。若同机容器网络、代理或TLS不同于上述两种拓扑，先调整新SAS受限监听与网络，再用 `--auth-url http(s)://实际可达地址/auth` 指定Broker回调；跨主机配置须自行验收。
+证书轮换后，只更新对应 RF Link Cluster 的 `certFingerprint`，核验后重启 SAS；不能把程序导出的独立 `sas-config-*.json` 整份替换原 FMO 配置。工具遇到同 UID 不同指纹会拒绝，要求人工检查轮换。
 
-## EMQX 5.8.9冷启动边界
+撤回时先 `./beacon.sh stop`，只移除新增 RF Link Cluster 并重启原 SAS。保留原主身份、其他节点和 Beacon 回执。是否继续信任 RF Link 根由管理员决定；只有确认无其他身份使用时才移除，不能还原过时整份配置覆盖后来改动。
 
-CI及上游源码确认：Broker可能先监听端口，再装载HTTP认证hook；hook尚未就绪时，即使配置了认证，CONNECT也可能被默认接受。新监听器使用quick_deny_anonymous提前拒绝缺失用户名，但不能防止此时携带非空假用户名的连接。每次Broker冷启动都须考虑该上游窗口；本项目没有实现外部启动流量门禁。维护时用云安全组、上游防火墙或已验证覆盖Docker流量的策略限制外部接入，不要仅凭端口能连或一次CONNECT成功就结束维护。
-
-测试以受控认证后端实际收到请求判定认证就绪，随后严格检查匿名/错误/跨入口拒绝；这不代表启动的每一瞬间均已fail-closed。原FMO配置不因本项目而自动增加此保护。
+[官方 SAS Cluster 管理](https://github.com/BG5ESN/fmo-server-authrozier-service#集群管理) · [SAS 配置说明](sas-setup.md)

@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 # 产品需求
 
@@ -19,25 +19,17 @@ last-reviewed: 2026-11-06
 
 使用独立EMQX + RF Link SAS + Beacon。RF Link公开身份用于该SAS，公告端口与它认证的MQTT端口一致。支持Docker及Linux原生运行；完整栈Compose为新建服务器入口。
 
-### 为已有FMO服务器增加RF Link接入
+### 已有FMO：信任并添加RF Link广播
 
-必须保留原FMO SAS的UID、证书指纹、管理员、数据和原MQTT端口及认证链。新增独立RF Link SAS实例、配置/根/持久目录及HTTP监听地址；在原Broker新增独立MQTT监听端口，仅该监听器接入新SAS。RF Link公告和新SAS使用新端口，不能用RF Link广播身份覆盖原FMO SAS。
+保留原SAS主UID、指纹、管理员、根、数据以及原MQTT地址、端口和认证回调。在同一SAS的Mqtt.Clusters追加RF Link目标身份，并加入明确认可的RF Link根；不新建SAS或MQTT监听器。非空AllowIssuerSn须明确允许新签发者，不能清空旧限制。所有身份共享根、issuer过滤及管理员/角色策略，须检查跨CA的UID冲突及权限。
 
-两个端口复用原Broker，保留原topic/ACL语义；合法FMO客户端继续从旧端口连接，RF Link客户端从新端口连接。是否在同房间互通须实测，不能只验证端口healthy。不得通过替换全局认证链实现扩展，不得把新HTTP认证器随意追加到原链导致跨端口授权。
-
-### 将已有FMO转换为RF Link
-
-用户明确选择convert后，备份原SAS配置、管理员、信任根及服务启动方式，才提供替换原服务器身份的参数。可沿用原MQTT端口，认证仍回调选定SAS；不承诺继续接受绑定旧身份的FMO客户端。失败时停止广播并通过原配置备份回滚，不能删除Beacon状态或防回滚记录。
+生成工具只写新的候选文件，不覆盖原配置，不修改服务或自动迁移旧双SAS实例。保留未知字段、其他Cluster和全部主身份；同身份重复运行幂等，冲突明确失败。证书轮换仅修改对应Cluster的指纹。
 
 ### 操作流程与验收
 
-先选择业务场景（新建、FMO兼容扩展或转换），再识别SAS运行方式（Compose/Docker/原生）。自动检测到原SAS不代表可以修改它；不能根据Beacon或SAS镜像推断业务用途。
+仅选择new-server或coexist，再识别SAS运行方式（Compose/Docker/原生）。首次流程为申请/等待 → 安装信任并配置身份 → 验证客户端 → doctor/start。只填写必要资料；UID、指纹等从已验证身份生成。转换及双SAS入口移除。
 
-首次流程为申请/等待 → 配置对应的新SAS及MQTT入口 → 验证客户端 → doctor/start。教程无需追求完全自动化，管理员只填写必要资料；UID、指纹等从已验证身份生成。
-
-兼容扩展验收须覆盖：原端口/原身份的合法FMO登录和消息收发不变；新端口合法RF Link登录和消息收发；两端口的错误身份、匿名连接、SAS不可达均被拒绝；认证器按监听器隔离；目标topic/ACL及跨端口同房间消息按预期互通；停止RF Link扩展后原FMO仍可用。Docker端口映射和防火墙配置也属于验收范围。
-
-完整栈Compose用于新建；兼容扩展用独立SAS Compose和EMQX 5.8.9增量监听器，转换用原SAS参数。已验证受控HTTP后端下的双监听认证/消息/ACL隔离，不等于真实FMO证书或官方设备验收。
+已有FMO验收覆盖：原FMO和RF Link通过相同端口合法登录、房间消息和语音；错误身份/匿名拒绝；现有ACL/FAS与权限正确；撤回新Cluster后原FMO继续使用。容器healthy或SAS配置加载不能代替合法客户端验收。
 
 ## 运维与非目标
 
