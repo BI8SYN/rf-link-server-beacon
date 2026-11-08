@@ -2,6 +2,7 @@
 """Load synthetic identities in the actual pinned SAS, with networking disabled."""
 import importlib.util
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -36,7 +37,11 @@ with tempfile.TemporaryDirectory(prefix='beacon-single-sas-') as tmp:
     # Only public roots and synthetic identities; networking is disabled.
     shutil.copytree(ROOT/'deploy/trust/roots', tmp/'sasdata'/'roots')
     name = 'beacon-single-sas-' + str(time.time_ns())
-    args = ['--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    # Match the bind-mount owner: Linux preserves tempfile's 0700 directory
+    # permissions, while the image normally runs as app:1654. Keep that privacy
+    # boundary instead of making temporary files readable by all host users.
+    args = ['--user', str(os.getuid())+':'+str(os.getgid()),
+            '--network', 'none', '--read-only', '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges:true',
             '--mount', 'type=bind,src='+str(tmp)+',dst=/test,readonly',
             '--mount', 'type=bind,src='+str(tmp/'sasdata')+',dst=/sasdata']
