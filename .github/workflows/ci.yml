@@ -21,7 +21,7 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: go mod verify
-      - run: sh -n beacon.sh
+      - run: sh -n beacon.sh && sh -n deploy/native/download.sh && sh -n deploy/systemd/install.sh
       - run: docker compose config --quiet
       - run: docker compose -f compose.beacon.yaml config --quiet
       - run: docker compose -f compose.beacon.yaml -f compose.dev.yaml config --quiet

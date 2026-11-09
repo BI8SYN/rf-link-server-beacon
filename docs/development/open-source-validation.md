@@ -59,3 +59,7 @@ last-reviewed: 2026-11-07
 ## 2026-11-08：Linux CI 临时目录权限修正
 
 首次推送在Linux CI的单SAS容器测试失败：官方镜像默认用户app（UID1654）无法读取runner所有的0700临时目录，SAS报告配置不存在。本机Docker的文件共享行为未暴露该差异。测试改为让隔离容器使用临时目录所有者的UID/GID，保留0700权限、只读配置、禁网络和cap-drop约束，不改变部署模板或运行中的SAS。
+
+## 2026-11-09：原生预编译安装
+
+本地race/vet、6项Python测试、脚本语法、完整栈合成参数及独立广播Compose校验通过。离线下载器测试覆盖amd64/arm64选择、校验成功、篡改失败保留旧程序、未知架构和非法版本拒绝；不调用生产服务。deploy-native复用原systemd安装器，真实宿主机安装仍未实测。GitHub Actions负责实际Linux双架构构建、artifact和版本tag Release发布；运行依赖无需Go，源码开发模式仍可本地编译。

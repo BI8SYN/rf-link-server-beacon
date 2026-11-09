@@ -19,3 +19,5 @@ last-reviewed: 2026-11-07
 - sas-command部署识别在宿主机脚本完成，仅查询docker ps的镜像/Compose标签及本机SAS安装状态；不读取容器环境变量、不挂载socket。Go CLI仅接受明确部署类型，不把Beacon的容器环境作为SAS拓扑依据。
 
 - SAS生成先校验scenario，仅new-server/coexist；coexist复用同SAS同端点，输出Mqtt.Clusters五字段（uid、callsign、mqtt_host、mqtt_port、certFingerprint）。离线候选生成用Python 3标准库，JSON键无歧义，保留原Server、管理员、Trust、HTTP及其他/未知字段；拒绝主UID/现存节点冲突、端点不匹配和覆盖已有文件，0600输出。管理员检查后手工应用到实际持久卷并重启原SAS；旧转换/新监听参数拒绝，CI不访问生产设施。
+
+- 原生安装只下载固定GitHub仓库的Release与SHA256SUMS，HTTPS校验启用，支持Linux amd64/arm64；校验失败保留旧文件且不停止服务，不自动退回源码编译。GitHub CI使用CGO_ENABLED=0构建两架构，v* tag发布公开资产。

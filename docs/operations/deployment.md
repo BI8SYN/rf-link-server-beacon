@@ -1,11 +1,11 @@
 ---
-last-reviewed: 2026-11-07
+last-reviewed: 2026-11-09
 ---
 # 部署、备份与迁移
 
 > 先选择[完全新建](full-server.md)或[已有FMO](coexist.md)。已有FMO在原SAS追加RF Link Cluster并安装认可根，保留主身份、端口及认证回调。
 
-新建MQTT / SAS见[完整服务器教程](full-server.md)，其他场景见[README](../../README.md)。所有命令在源码目录执行，Docker Compose v2 为必需。首次构建需下载固定 Go 镜像，运行镜像不含凭据或源码。
+新建MQTT / SAS见[完整服务器教程](full-server.md)，其他场景见[README](../../README.md)。所有命令在仓库目录执行；Docker方式需Compose v2。首次构建需下载固定 Go 镜像，运行镜像不含凭据或源码。
 
 ## 广播服务
 
@@ -19,7 +19,13 @@ Docker 数据默认 `./data`，可用 `BEACON_DATA_DIR=/绝对路径` 覆盖；�
 
 ## 原生 Linux systemd
 
-需 Linux、systemd、root 和 Go 工具链。`sudo ./beacon.sh deploy-native ...` 创建 `rf-link-beacon` 账号，将程序安装到 `/usr/local/lib/rf-link-server-beacon/beacon`，资料放在 `/var/lib/rf-link-server-beacon`。进程退出失败后 15 秒重启。
+需 Linux、systemd、root、curl和系统CA证书，**无需安装Go或Docker**。自动识别amd64/arm64，从本仓库GitHub Releases下载二进制及SHA256SUMS，校验通过才安装；其他架构明确失败。GitHub Actions负责交叉编译并发布，不在用户机器编译。
+
+```sh
+sudo ./beacon.sh deploy-native --callsign YOURCALL --ssid 12 --grid OL15ic --name "RF Link" --host mqtt.example.com --port 1883 --owner "负责人" --email owner@example.com
+```
+
+此命令等待人工审核/签发，身份就绪后会自动广播；不会自动配置SAS。已有身份先按迁移要求停止源实例并将完整data放入`/var/lib/rf-link-server-beacon`，然后不传初始化参数执行。`deploy-native` 创建 `rf-link-beacon` 账号，将程序安装到 `/usr/local/lib/rf-link-server-beacon/beacon`，资料放在 `/var/lib/rf-link-server-beacon`。进程退出失败后 15 秒重启。
 
 ```sh
 sudo systemctl status rf-link-server-beacon
@@ -28,7 +34,7 @@ sudo systemctl stop rf-link-server-beacon
 sudo systemctl start rf-link-server-beacon
 ```
 
-命令行维护可显式使用该二进制与实际配置路径；运行中的服务持有状态锁，不要并行运行另一个发报进程。`sas-command` 是只读例外。macOS 开发可用 `BEACON_NATIVE=1 ./beacon.sh setup ...`，不提供 macOS 常驻安装器。原生单位文件做过隔离检查，宿主机安装尚未实测。
+命令行维护可显式使用该二进制与实际配置路径；运行中的服务持有状态锁，不要并行运行另一个发报进程。`sas-command` 是只读例外。macOS 开发可用 `BEACON_NATIVE=1 ./beacon.sh setup ...`，不提供 macOS 常驻安装器。下载器已做离线失败保护测试；原生单位文件做过隔离检查，宿主机实际安装尚未实测。
 
 ## 迁移与备份
 
@@ -48,3 +54,12 @@ RF Link 根内置在程序中；中间证书及用户证书从公开身份响应
 ## 升级
 
 先备份并停止广播，`git pull --ff-only` 后运行 `./beacon.sh deploy-docker` 重建并复用原数据。不要重新 `setup`。SAS/EMQX 使用固定摘要，升级由管理员审阅上游兼容性后单独进行；仅更新 Beacon 不会改变它们。认证/证书轮换后，用 `sas-command` 核对新身份并应用到 SAS，再验证登录和广播。
+
+原生升级：备份完整`/var/lib/rf-link-server-beacon`，更新仓库后执行`sudo ./beacon.sh deploy-native`，保留配置与回执。默认下载最新稳定Release；固定版本使用`sudo env BEACON_VERSION=v0.1.0 ./beacon.sh deploy-native`。下载或校验失败不会停止旧服务；校验值与程序均来自GitHub Release，依赖GitHub仓库和HTTPS的可信性，不是独立签名证明。
+
+维护命令无需Go：
+
+```sh
+sudo /usr/local/lib/rf-link-server-beacon/beacon doctor --config /var/lib/rf-link-server-beacon/config.json
+sudo /usr/local/lib/rf-link-server-beacon/beacon sas-command --config /var/lib/rf-link-server-beacon/config.json --scenario coexist --deployment native
+```
