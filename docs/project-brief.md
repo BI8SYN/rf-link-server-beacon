@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-11-07
+last-reviewed: 2026-11-13
 ---
 # 项目上下文
 
@@ -26,3 +26,5 @@ sas-command在兼容模式识别原SAS部署，仅输出对应类型的配置步
 转换入口、双SAS Compose和新监听器生成已移除，旧实例不自动迁移或删除。隔离容器配置加载测试与真实客户端/语音验收是不同范围，后者须部署者自行验证。
 
 2026-11-09：deploy-native改为自动下载GitHub Release的Linux amd64/arm64二进制并验证SHA256SUMS，无需Go。CI交叉构建artifact，v* tag发布Release；BEACON_VERSION可固定版本。源码开发BEACON_NATIVE=1 setup仍可本地编译。
+
+新建 Docker 服务器使用 compose.managed.yaml 或发行版的部署压缩包。管理员填写 .env 后，Beacon 自动申请、领取、配置专用 SAS 并检查 MQTT 认证后开放入口和广播。日志与只读 status 记录进度。原生完整栈属于下一阶段。

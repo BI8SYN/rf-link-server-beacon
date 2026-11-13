@@ -11,23 +11,9 @@
 | 新建RF Link服务器 | [新建教程](docs/operations/full-server.md) | 新部署MQTT + RF Link SAS |
 | 已有FMO，信任并增加RF Link广播 | [已有FMO教程](docs/operations/coexist.md) | 保留原主身份，同SAS追加RF Link Cluster，共用原MQTT地址和端口 |
 
-先安装Git、Docker和Compose v2并获取源码：
+**新建 Docker 服务器**下载发行版的 Compose 压缩包，填写 `.env`，执行 `docker compose up -d`。Beacon 自动申请、等待人工签发、领取身份、配置 SAS、检查 MQTT 认证和启动广播。进度用 `docker compose logs -f beacon` 或 `docker compose exec beacon /rf-link-server-beacon status` 查看。完整步骤见[一键部署教程](docs/operations/full-server.md)。
 
-```sh
-git clone https://github.com/BI8SYN/rf-link-server-beacon.git
-cd rf-link-server-beacon
-```
-
-两条流程都只有四步：**申请/等待 → 按提示配置 → 验证客户端 → 开始广播**。跟着所选教程填自己的呼号、SSID、网格和服务器资料即可；UID、指纹自动生成。
-
-取得身份后运行 `./beacon.sh sas-command`，终端会先问你选哪种场景。脚本调用请明确指定：
-
-```sh
-./beacon.sh sas-command --scenario new-server
-./beacon.sh sas-command --scenario coexist
-```
-
-已有FMO使用单SAS多身份，生成候选配置供管理员核对，不替换原主身份。程序只生成配置，不自动修改Broker或SAS。`setup` / `wait`不广播；客户端验证完成后才执行 `./beacon.sh doctor` 和 `./beacon.sh start`。
+**已有 FMO**按[兼容教程](docs/operations/coexist.md)在原 SAS 追加身份。下方日常命令适用于现有独立 Beacon 部署。
 
 ## 日常管理
 

@@ -29,3 +29,5 @@ jobs:
       - run: docker run --rm --network none beacon-check version
       - run: python3 -m unittest discover -s tools -p 'test_*.py'
       - run: python3 tools/single-sas-smoke.py
+      - run: docker build --target integration -t beacon-managed-integration .
+      - run: python3 tools/managed-compose-smoke.py

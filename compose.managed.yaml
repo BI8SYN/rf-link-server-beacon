@@ -1,0 +1,107 @@
+name: rf-link-managed
+x-service: &service
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+services:
+  beacon:
+    <<: *service
+    image: ${BEACON_IMAGE:-ghcr.io/bi8syn/rf-link-server-beacon:v0.2.0}
+    command: ["managed"]
+    read_only: true
+    group_add: ["1000"]
+    environment:
+      BEACON_MANAGED: "1"
+      BEACON_CALLSIGN: ${BEACON_CALLSIGN:?Fill in BEACON_CALLSIGN}
+      BEACON_SSID: ${BEACON_SSID:-15}
+      BEACON_GRID: ${BEACON_GRID:?Fill in BEACON_GRID}
+      BEACON_NAME: ${BEACON_NAME:?Fill in BEACON_NAME}
+      BEACON_MQTT_HOST: ${BEACON_MQTT_HOST:?Fill in BEACON_MQTT_HOST}
+      BEACON_MQTT_PORT: ${BEACON_MQTT_PORT:-1883}
+      BEACON_COUNTRY: ${BEACON_COUNTRY:-CN}
+      BEACON_OWNER: ${BEACON_OWNER:?Fill in BEACON_OWNER}
+      BEACON_EMAIL: ${BEACON_EMAIL:?Fill in BEACON_EMAIL}
+    ports:
+      - "${BEACON_BIND_ADDR:-0.0.0.0}:${BEACON_MQTT_PORT:-1883}:1883"
+    volumes:
+      - beacon-data:/data
+      - exchange:/exchange
+      - dashboard:/dashboard
+      - sas-data:/sasdata:ro
+      - emqx-data:/brokerdata:ro
+
+  sas:
+    <<: *service
+    image: ghcr.io/bg5esn/fmo-server-authrozier-service:1.0.6@sha256:4145c2a65bff74125f1911d602f7988446b88dfd721ce139cd17a5952dd56323
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        state=/home/app/.sas
+        rm -f "$$state/beacon-loaded"
+        trap 'if [ -n "$${pid:-}" ]; then kill -TERM "$$pid" 2>/dev/null || true; wait "$$pid" || true; fi' EXIT
+        trap 'exit 0' TERM INT
+        until [ -s /exchange/sas.json ]; do sleep 1; done
+        cp /exchange/sas.json "$$state/managed.json"
+        hash=$$(sha256sum "$$state/managed.json")
+        hash=$${hash%% *}
+        mkdir -p "$$state/roots"
+        cp /exchange/roots/*.json "$$state/roots/"
+        dotnet sas.dll --config "$$state/managed.json" &
+        pid=$$!
+        until (exec 3<>/dev/tcp/127.0.0.1/8080) 2>/dev/null; do
+          kill -0 "$$pid"
+          sleep 1
+        done
+        printf '%s\n' "$$hash" > "$$state/beacon-loaded.new"
+        mv "$$state/beacon-loaded.new" "$$state/beacon-loaded"
+        while kill -0 "$$pid" 2>/dev/null; do
+          current=$$(sha256sum /exchange/sas.json || true)
+          [ "$${current%% *}" = "$$hash" ] || break
+          sleep 1
+        done
+        rm -f "$$state/beacon-loaded"
+        exit 1
+    depends_on:
+      beacon:
+        condition: service_started
+    volumes:
+      - exchange:/exchange:ro
+      - sas-data:/home/app/.sas
+
+  emqx:
+    <<: *service
+    image: emqx/emqx:5.8.9@sha256:35b46f7aa7a0d51f3959e4344221ac5ec7f948b03e43099286b6c40a07bb393b
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        until [ -s /dashboard/password ]; do sleep 1; done
+        boot=$$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+        printf '%s\n' "$$boot" > /opt/emqx/data/beacon-boot.new
+        mv /opt/emqx/data/beacon-boot.new /opt/emqx/data/beacon-boot
+        secret=$$(cat /dashboard/password)
+        export EMQX_DASHBOARD__DEFAULT_PASSWORD="\"$$secret\""
+        export EMQX_AUTHENTICATION__1="$$(printf '%s' "$$BEACON_AUTH" | sed "s/__BOOT__/$$boot/")"
+        exec /usr/bin/docker-entrypoint.sh /opt/emqx/bin/emqx foreground
+    depends_on:
+      beacon:
+        condition: service_started
+    environment:
+      EMQX_NODE__NAME: emqx@emqx
+      EMQX_LISTENERS__TCP__DEFAULT__ENABLE_AUTHN: quick_deny_anonymous
+      BEACON_AUTH: >-
+        {mechanism = password_based, backend = http, enable = true, method = post, url = "http://beacon:8081/auth/__BOOT__", headers = {"Content-Type" = "application/json"}, body = {username = "$${username}", password = "$${password}"}}
+    ports:
+      - "127.0.0.1:${BEACON_DASHBOARD_PORT:-18083}:18083"
+    volumes:
+      - emqx-data:/opt/emqx/data
+      - dashboard:/dashboard:ro
+
+volumes:
+  beacon-data:
+  exchange:
+  dashboard:
+  sas-data:
+  emqx-data:

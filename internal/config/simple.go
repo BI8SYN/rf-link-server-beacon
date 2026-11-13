@@ -249,3 +249,69 @@ func writeNew(path string, raw []byte) error {
 	}
 	return e
 }
+
+// ApplyManagedSettings updates only station fields in an existing simple
+// configuration. The originally submitted applicant and callsign are durable.
+func ApplyManagedSettings(path string, requested Simple) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	saved := simpleDefaults()
+	if err = jsonx.Decode(raw, &saved); err != nil {
+		return errors.New("managed deployment requires its original simple configuration")
+	}
+	if strings.ToUpper(requested.Callsign) != saved.Callsign {
+		return errors.New("BEACON_CALLSIGN differs from the existing identity")
+	}
+	saved.Server = requested.Server
+	saved.SSID = requested.SSID
+	saved.Grid = strings.ToUpper(requested.Grid)
+	saved.CountryCode = requested.CountryCode
+	if _, err = saved.expand(filepath.Dir(path)); err != nil {
+		return err
+	}
+	// Always include SSID zero because the simplified loader defaults to 15.
+	fields := map[string]any{
+		"callsign": saved.Callsign, "ssid": saved.SSID, "grid": saved.Grid, "server": saved.Server,
+		"applicant": saved.Applicant, "country_code": saved.CountryCode, "filter_km": saved.FilterKM,
+	}
+	if saved.ServiceURL != "" {
+		fields["service_url"] = saved.ServiceURL
+	}
+	if saved.TrustedRootFile != "" {
+		fields["trusted_root_file"] = saved.TrustedRootFile
+	}
+	if len(saved.CRLOrigins) > 0 {
+		fields["crl_origins"] = saved.CRLOrigins
+	}
+	next, err := json.MarshalIndent(fields, "", "  ")
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	defer f.Close()
+	if _, err = f.Write(append(next, '\n')); err != nil {
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(tmp, path); err != nil {
+		return err
+	}
+	d, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
+}

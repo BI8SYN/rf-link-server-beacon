@@ -34,3 +34,7 @@ last-reviewed: 2026-11-07
 ## 运维与非目标
 
 提供 setup/wait/status/doctor/sas-command/once/start/stop/logs；once 默认不发 APRS。状态区分实际发送与对端显示，容器启动不等于合法客户端验收。项目不实现 Broker、SAS 认证算法、FAS、CA 签发或本地私钥模式，不承诺官方设备默认信任新增根。
+
+## Docker 自动建服
+
+新建服务器只需填写 .env 并运行 Docker Compose。Beacon 自动提交可恢复的申请，等待人工签发和发布，领取并验证身份后配置 SAS。MQTT 入口在认证实际就绪后开放，随后自动广播。待审核时部署命令可退出，日志和只读 status 显示申请编号、当前步骤、失败原因与重试时间、最近及下次发报时间。EMQX Dashboard 初始密码首次自动生成并保存。
