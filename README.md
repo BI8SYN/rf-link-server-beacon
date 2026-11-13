@@ -56,7 +56,7 @@ cd rf-link-server-beacon
 
 ## 其他部署方式
 
-支持 Linux systemd 原生部署，以及已有完整身份时的一行 Docker 部署，见[部署说明](docs/operations/deployment.md)。`deploy-docker` / `deploy-native` 会在身份就绪后自动广播，**不会自动配置 SAS**，新建服务器按完整服务器教程操作；已有FMO按兼容教程追加身份。
+支持无需Go的Linux amd64/arm64 systemd原生部署（自动下载GitHub Release并核验SHA-256），以及已有完整身份时的一行 Docker 部署，见[部署说明](docs/operations/deployment.md)。`deploy-docker` / `deploy-native` 会在身份就绪后自动广播，**不会自动配置 SAS**，新建服务器按完整服务器教程操作；已有FMO按兼容教程追加身份。
 
 ## 证书、凭据与迁移
 

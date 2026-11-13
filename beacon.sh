@@ -198,7 +198,11 @@ case "$BEACON_ACTION" in
     for BEACON_ARGUMENT in "$@"; do
       if [ "$BEACON_ARGUMENT" = --dev ]; then BEACON_DEV=1; fi
     done
-    beacon_build
+    if [ "$BEACON_ACTION" = deploy-native ]; then
+      sh "$BEACON_PROJECT_ROOT/deploy/native/download.sh" "$BEACON_BINARY"
+    else
+      beacon_build
+    fi
     if [ ! -f "$BEACON_DATA_DIR/config.json" ]; then
       beacon_run init --data-dir "$BEACON_PROGRAM_DATA" "$@"
     fi

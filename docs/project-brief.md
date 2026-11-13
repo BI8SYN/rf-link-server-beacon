@@ -24,3 +24,5 @@ SAS 与广播使用同一公开身份，`sas-command` 在宿主机识别实际SA
 sas-command在兼容模式识别原SAS部署，仅输出对应类型的配置步骤。tools/sas-config.py离线生成候选，只追加一个Cluster，保留原配置其他字段；拒绝UID/指纹冲突、端点不匹配、歧义键和已有输出文件，不自动应用。管理员备份、安装认可根、按需扩展非空AllowIssuerSn、检查差异后仅重启原SAS。证书轮换只更新对应Cluster指纹，不能用独立SAS导出配置覆盖原FMO配置。
 
 转换入口、双SAS Compose和新监听器生成已移除，旧实例不自动迁移或删除。隔离容器配置加载测试与真实客户端/语音验收是不同范围，后者须部署者自行验证。
+
+2026-11-09：deploy-native改为自动下载GitHub Release的Linux amd64/arm64二进制并验证SHA256SUMS，无需Go。CI交叉构建artifact，v* tag发布Release；BEACON_VERSION可固定版本。源码开发BEACON_NATIVE=1 setup仍可本地编译。
