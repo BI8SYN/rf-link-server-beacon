@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/BI8SYN/rf-link-server-beacon/internal/app"
 	"github.com/BI8SYN/rf-link-server-beacon/internal/config"
+	"github.com/BI8SYN/rf-link-server-beacon/internal/managed"
 	"io"
 	"os"
 	"os/signal"
@@ -19,10 +20,32 @@ func Run(args []string, out, errOut io.Writer, version string) int {
 }
 func RunWithInput(args []string, input io.Reader, out, errOut io.Writer, version string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(out, "Usage: rf-link-server-beacon <init|version|status|enroll|wait|doctor|sas-command|sync-identity|once|run|serve> [--config FILE] [--send] [--sas-output FILE] [--scenario new-server|coexist] [--deployment full-stack|compose|docker|native]")
+		fmt.Fprintln(out, "Usage: rf-link-server-beacon <init|version|status|enroll|wait|doctor|sas-command|sync-identity|once|run|serve|managed|dashboard-password> [--config FILE] [--send] [--sas-output FILE] [--scenario new-server|coexist] [--deployment full-stack|compose|docker|native]")
 		return 0
 	}
 	cmd := args[0]
+	if cmd == "managed" || cmd == "dashboard-password" || (cmd == "status" && len(args) == 1 && os.Getenv("BEACON_MANAGED") == "1") {
+		if len(args) != 1 {
+			fmt.Fprintln(errOut, "unexpected arguments")
+			return 2
+		}
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		var e error
+		switch cmd {
+		case "managed":
+			e = managed.Run(ctx, out)
+		case "status":
+			e = managed.Status(out)
+		case "dashboard-password":
+			e = managed.Password(out)
+		}
+		if e != nil && !errors.Is(e, context.Canceled) {
+			fmt.Fprintln(errOut, e)
+			return 1
+		}
+		return 0
+	}
 	if cmd == "init" {
 		return initialize(args[1:], input, out, errOut)
 	}

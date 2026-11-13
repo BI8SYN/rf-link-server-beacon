@@ -278,12 +278,17 @@ func (s *Service) checkCRLs(ctx context.Context, b identity.Bound) error {
 	}
 	return nil
 }
+func (s *Service) sasConfig(b identity.Bound, roots, addr string) map[string]any {
+	payload := map[string]any{"Server": map[string]any{"Uid": b.User.UID, "Callsign": b.User.Callsign, "IssuerSn": b.User.IssuerSN, "CertFingerprint": b.User.Fingerprint(), "Admins": []any{}}, "Mqtt": map[string]any{"Host": s.cfg.Station.Host, "Port": s.cfg.Station.Port, "Clusters": []any{}}, "Trust": map[string]any{"AllowIssuerSn": []uint64{}, "RootsDir": roots}, "Crl": map[string]any{"RefreshSec": 14400}, "Http": map[string]any{"Addr": addr, "Port": 8080, "TtlSec": 14400, "ResponseTemplate": "emqx", "MaxBodyBytes": 65536, "MaxConcurrent": 128}, "Log": map[string]any{"Level": "Info"}, "Update": map[string]any{"Enabled": false}}
+	return payload
+}
+
 func (s *Service) ExportSAS(ctx context.Context, path string) error {
 	_, b, e := s.check(ctx)
 	if e != nil {
 		return e
 	}
-	payload := map[string]any{"Server": map[string]any{"Uid": b.User.UID, "Callsign": b.User.Callsign, "IssuerSn": b.User.IssuerSN, "CertFingerprint": b.User.Fingerprint(), "Admins": []any{}}, "Mqtt": map[string]any{"Host": s.cfg.Station.Host, "Port": s.cfg.Station.Port, "Clusters": []any{}}, "Trust": map[string]any{"AllowIssuerSn": []uint64{}, "RootsDir": "/var/lib/fmo-sas/.sas/roots"}, "Crl": map[string]any{"RefreshSec": 14400}, "Http": map[string]any{"Addr": "127.0.0.1", "Port": 8080, "TtlSec": 14400, "ResponseTemplate": "emqx", "MaxBodyBytes": 65536, "MaxConcurrent": 128}, "Log": map[string]any{"Level": "Info"}, "Update": map[string]any{"Enabled": false}}
+	payload := s.sasConfig(b, "/var/lib/fmo-sas/.sas/roots", "127.0.0.1")
 	raw, e := json.MarshalIndent(payload, "", "  ")
 	if e != nil {
 		return e
@@ -322,6 +327,13 @@ func (s *Service) Cycle(ctx context.Context, send bool) (CycleResult, error) {
 	if e != nil {
 		return result, e
 	}
+	return s.cycle(ctx, send, info, b, nil)
+}
+
+func (s *Service) cycle(ctx context.Context, send bool, info signer.Identity, b identity.Bound, ready func() bool) (CycleResult, error) {
+	var result CycleResult
+	var e error
+
 	if send && s.state.Fingerprint != b.User.Fingerprint() {
 		return result, errors.New("SAS identity not synchronized; run sync-identity and apply generated configuration")
 	}
@@ -391,6 +403,12 @@ func (s *Service) Cycle(ctx context.Context, send bool) (CycleResult, error) {
 	result = CycleResult{Verified: true, Fingerprint: b.User.Fingerprint()}
 	if !send {
 		return result, nil
+	}
+	if ready != nil && b.User.Fingerprint() != s.state.Fingerprint {
+		return result, &RetryError{time.Second, "SAS identity rotated while signing"}
+	}
+	if ready != nil && !ready() {
+		return result, &RetryError{3 * time.Second, "mqtt_authentication_unavailable"}
 	}
 	s.state.LastAttempt = uint64(s.now().Unix())
 	if e = s.store.Write(s.state); e != nil {

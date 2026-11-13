@@ -63,3 +63,7 @@ last-reviewed: 2026-11-07
 ## 2026-11-09：原生预编译安装
 
 本地race/vet、6项Python测试、脚本语法、完整栈合成参数及独立广播Compose校验通过。离线下载器测试覆盖amd64/arm64选择、校验成功、篡改失败保留旧程序、未知架构和非法版本拒绝；不调用生产服务。deploy-native复用原systemd安装器，真实宿主机安装仍未实测。GitHub Actions负责实际Linux双架构构建、artifact和版本tag Release发布；运行依赖无需Go，源码开发模式仍可本地编译。
+
+## 2026-11-13 Docker 自动建服
+
+隔离 Compose 测试使用真实 SAS 1.0.6 和 EMQX 5.8.9、临时签名和认证证书，以及容器内的 Trust/CRL/APRS 模拟服务。覆盖待审核期间 MQTT 入口关闭、批准后同一申请自动领取、SAS 真实签名登录、无效凭据拒绝、首次 STATION 本地接收及 EMQX 重启后恢复认证。Go 测试额外覆盖启动代次切换和 SAS 配置变化时拒绝复用旧就绪结果。生产客户端发现及语音由管理员验收。
